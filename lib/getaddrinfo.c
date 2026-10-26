@@ -44,6 +44,7 @@ TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
  */
 
 #include "rsync.h"
+#include "ifuncs.h" /* my_strdup() behind the strdup() macro */
 
 #ifndef SMB_MALLOC
 #define SMB_MALLOC(s) malloc(s)

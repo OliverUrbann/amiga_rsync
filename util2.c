@@ -35,6 +35,9 @@ char *do_calloc = "42";
  **/
 int msleep(int t)
 {
+#ifdef __amigaos__
+	amiga_check_wrapup(); /* the receiver polls for wrap-up in its sleep loops */
+#endif
 #ifdef HAVE_NANOSLEEP
 	struct timespec ts;
 

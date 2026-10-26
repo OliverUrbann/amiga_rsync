@@ -109,6 +109,9 @@ static void gen_challenge(const char *addr, char *challenge)
 	sum_end(digest);
 
 	base64_encode(digest, len, challenge, 0);
+#ifdef __amigaos__
+	strlcpy(challenge, amiga_det_str("challenge", challenge), MAX_DIGEST_LEN*2);
+#endif
 }
 
 /* Generate an MD4 hash created from the combination of the password
@@ -463,6 +466,10 @@ void auth_client(int fd, const char *user, const char *challenge)
 
 	if (!pass)
 		pass = "";
+#ifdef __amigaos__
+	/* Don't ask a second time in the replaying receiver. */
+	pass = amiga_det_str("password", pass);
+#endif
 
 	generate_hash(pass, challenge, pass2);
 	io_printf(fd, "%s %s\n", user, pass2);

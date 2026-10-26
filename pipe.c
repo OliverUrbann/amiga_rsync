@@ -54,6 +54,14 @@ pid_t piped_child(char **command, int *f_in, int *f_out)
 	if (DEBUG_GTE(CMD, 1))
 		print_child_argv("opening connection using:", command);
 
+#ifdef __amigaos__
+	if ((pid = amiga_piped_child(command, f_in, f_out, blocking_io > 0)) == -1) {
+		rsyserr(FERROR, errno, "Failed to exec %s", command[0]);
+		exit_cleanup(RERR_IPC);
+	}
+	return pid;
+#endif
+
 	if (fd_pair(to_child_pipe) < 0 || fd_pair(from_child_pipe) < 0) {
 		rsyserr(FERROR, errno, "pipe");
 		exit_cleanup(RERR_IPC);

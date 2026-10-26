@@ -49,7 +49,7 @@ OBJS1_NO_MAIN=flist.o rsync.o generator.o receiver.o cleanup.o sender.o exclude.
 OBJS1=$(OBJS1_NO_MAIN) main.o
 OBJS2=options.o io.o compat.o hlink.o token.o uidlist.o socket.o hashtable.o \
 	usage.o fileio.o batch.o clientname.o chmod.o acls.o xattrs.o
-OBJS3=progress.o pipe.o @MD5_ASM@ @ROLL_SIMD@ @ROLL_ASM@
+OBJS3=progress.o pipe.o amiga/amiga.o amiga/amiga_dos.o @MD5_ASM@ @ROLL_SIMD@ @ROLL_ASM@
 DAEMON_OBJ = params.o loadparm.o clientserver.o access.o connection.o authenticate.o
 popt_OBJS= popt/popt.o  popt/poptconfig.o \
 	popt/popthelp.o popt/poptparse.o popt/poptint.o
@@ -230,6 +230,15 @@ simd-checksum-avx2.o: simd-checksum-avx2.S
 
 lib/md5-asm-x86_64.o: lib/md5-asm-x86_64.S lib/md-defines.h
 	@$(srcdir)/cmd-or-msg disable-md5-asm $(CC) -I. @NOEXECSTACK@ -c -o $@ $(srcdir)/lib/md5-asm-x86_64.S
+
+# AmigaOS support layer; compiles to nothing on other systems.
+amiga/amiga.o: amiga/amiga.c amiga/amiga.h $(HEADERS)
+	@mkdir -p amiga
+	$(CC) -I. -I$(srcdir) $(CFLAGS) $(CPPFLAGS) -c -o $@ $(srcdir)/amiga/amiga.c
+
+amiga/amiga_dos.o: amiga/amiga_dos.c
+	@mkdir -p amiga
+	$(CC) $(CFLAGS) -c -o $@ $(srcdir)/amiga/amiga_dos.c
 
 tls$(EXEEXT): $(TLS_OBJ)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(TLS_OBJ) $(LIBS)

@@ -556,6 +556,9 @@ enum delret {
 # include <floss.h(floss_getpwuid,floss_select,floss_seteuid)>
 # define S_IEXEC S_IXUSR
 # define ROOT_UID 65535
+#elif defined __amigaos__
+/* AmigaOS has no users; never act as root (no chown, no uid switching). */
+# define ROOT_UID ((uid_t)-3)
 #else
 # define ROOT_UID 0
 #endif
@@ -1560,4 +1563,8 @@ const char *get_panic_action(void);
 #define MEM_ALLOC_INFO mallinfo2
 #elif defined HAVE_MALLINFO
 #define MEM_ALLOC_INFO mallinfo
+#endif
+
+#ifdef __amigaos__
+#include "amiga/amiga.h"
 #endif

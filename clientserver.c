@@ -164,7 +164,15 @@ int start_socket_client(char *host, int remote_argc, char *remote_argv[],
 		*p = '\0';
 	}
 
+#ifdef __amigaos__
+	/* A replaying receiver reuses its parent's connection. */
+	if ((fd = amiga_inherited_fd("sock")) < 0) {
+		fd = open_socket_out_wrapped(host, rsync_port, bind_address, default_af_hint);
+		amiga_note_fd("sock", fd);
+	}
+#else
 	fd = open_socket_out_wrapped(host, rsync_port, bind_address, default_af_hint);
+#endif
 	if (fd == -1)
 		exit_cleanup(RERR_SOCKETIO);
 
@@ -550,6 +558,11 @@ static pid_t start_pre_exec(const char *cmd, int *arg_fd_ptr, int *error_fd_ptr)
 	int arg_fds[2], error_fds[2], arg_fd;
 	pid_t pid;
 
+#ifdef __amigaos__
+	errno = ENOSYS; /* exec hooks need fork() */
+	return (pid_t)-1;
+#endif
+
 	if ((error_fd_ptr && pipe(error_fds) < 0) || pipe(arg_fds) < 0 || (pid = fork()) < 0)
 		return (pid_t)-1;
 
@@ -792,7 +805,12 @@ static int rsync_module(int f_in, int f_out, int i, const char *addr, const char
 			name, host, addr);
 	}
 
+#ifdef __amigaos__
+	/* A replaying receiver belongs to a connection already counted. */
+	if (!amiga_replaying() && !claim_connection(lp_lock_file(i), lp_max_connections(i))) {
+#else
 	if (!claim_connection(lp_lock_file(i), lp_max_connections(i))) {
+#endif
 		if (errno) {
 			rsyserr(FLOG, errno, "failed to open lock file %s",
 				lp_lock_file(i));
@@ -969,7 +987,12 @@ static int rsync_module(int f_in, int f_out, int i, const char *addr, const char
 		 * daemon while this process waits for the exit status and
 		 * runs the indicated command at that point. */
 		if (*lp_postxfer_exec(module_id)) {
+#ifdef __amigaos__
+			pid_t pid = -1;
+			errno = ENOSYS; /* post-xfer exec needs fork() */
+#else
 			pid_t pid = fork();
+#endif
 			if (pid < 0) {
 				rsyserr(FLOG, errno, "fork failed");
 				io_printf(f_out, "@ERROR: fork failed\n");
@@ -1583,7 +1606,9 @@ int start_daemon(int f_in, int f_out)
 #ifdef HAVE_SIGACTION
 	sigact.sa_flags = SA_NOCLDSTOP;
 #endif
+#ifndef __amigaos__
 	SIGACTION(SIGCHLD, remember_children);
+#endif
 
 	return rsync_module(f_in, f_out, i, addr, host);
 }
@@ -1724,6 +1749,10 @@ static void create_pid_file(void)
 /* Become a daemon, discarding the controlling terminal. */
 static void become_daemon(void)
 {
+#ifdef __amigaos__
+	/* No fork()/setsid(); start it with "Run" to free the Shell. */
+	return;
+#else
 	int i;
 	pid_t pid = fork();
 
@@ -1754,6 +1783,7 @@ static void become_daemon(void)
 		close(i);
 		open("/dev/null", O_RDWR);
 	}
+#endif
 }
 
 /* Inetd supplies a connected IP stream on stdin. Socket activation may also

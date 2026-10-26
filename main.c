@@ -179,6 +179,9 @@ int shell_exec(const char *cmd)
 	int status;
 	pid_t pid;
 
+#ifdef __amigaos__
+	shell = NULL; /* no fork(); AmigaDOS runs the command via system() */
+#endif
 	if (!shell)
 		return system(cmd);
 
@@ -669,7 +672,26 @@ static pid_t do_cmd(char *cmd, char *machine, char *user, char **remote_argv, in
 		if (whole_file < 0 && !write_batch)
 			whole_file = 1;
 		set_allow_inc_recurse();
+#ifdef __amigaos__
+		{
+			/* No fork(): run ourselves again as the --server side. */
+			char *sargs[MAX_ARGS];
+			int sargc = 1, j;
+			sargs[0] = (char *)amiga_self_exe();
+			server_options(sargs, &sargc);
+			for (j = 0; j < argc && sargc < MAX_ARGS - 1; j++)
+				sargs[sargc++] = args[j];
+			sargs[sargc] = NULL;
+			if (DEBUG_GTE(CMD, 1))
+				print_child_argv("running local server:", sargs);
+			if ((pid = amiga_local_child(sargs, f_in_p, f_out_p)) == -1) {
+				rsyserr(FERROR, errno, "failed to start %s", amiga_self_exe());
+				exit_cleanup(RERR_IPC);
+			}
+		}
+#else
 		pid = local_child(argc, args, f_in_p, f_out_p, child_main);
+#endif
 #ifdef ICONV_CONST
 		setup_iconv();
 #endif
@@ -956,6 +978,10 @@ static void do_server_sender(int f_in, int f_out, int argc, char *argv[])
 	struct file_list *flist;
 	char *dir;
 
+#ifdef __amigaos__
+	amiga_stop_recording(); /* a sender never splits into generator/receiver */
+#endif
+
 	if (DEBUG_GTE(SEND, 1))
 		rprintf(FINFO, "server_sender starting pid=%d\n", (int)getpid());
 
@@ -1075,7 +1101,11 @@ static int do_recv(int f_in, int f_out, char *local_name)
 
 	io_flush(FULL_FLUSH);
 
+#ifdef __amigaos__
+	if ((pid = amiga_fork_receiver(error_pipe)) == -1) {
+#else
 	if ((pid = do_fork()) == -1) {
+#endif
 		rsyserr(FERROR, errno, "fork failed in do_recv");
 		exit_cleanup(RERR_IPC);
 	}
@@ -1175,7 +1205,11 @@ static int do_recv(int f_in, int f_out, char *local_name)
 	}
 	io_flush(FULL_FLUSH);
 
+#ifdef __amigaos__
+	amiga_tell_receiver_wrapup(pid);
+#else
 	kill(pid, SIGUSR2);
+#endif
 	wait_process_with_flush(pid, &exit_code);
 	return exit_code;
 }
@@ -1313,6 +1347,9 @@ void start_server(int f_in, int f_out, int argc, char *argv[])
 		send_msg_int(MSG_IO_TIMEOUT, io_timeout);
 
 	if (am_sender) {
+#ifdef __amigaos__
+		amiga_stop_recording();
+#endif
 		keep_dirlinks = 0; /* Must be disabled on the sender. */
 
 		/* Mirror client_run()'s sender_keeps_checksum check: a daemon-
@@ -1841,6 +1878,11 @@ int main(int argc,char *argv[])
 	raw_argc = argc;
 	raw_argv = argv;
 
+#ifdef __amigaos__
+	amiga_init(argc, argv);
+	atexit(amiga_cleanup);
+#endif
+
 	raise_fd_limit();
 
 #ifdef HAVE_SIGACTION
@@ -1853,7 +1895,9 @@ int main(int argc,char *argv[])
 #endif
 	SIGACTMASK(SIGUSR1, sigusr1_handler);
 	SIGACTMASK(SIGUSR2, sigusr2_handler);
+#ifndef __amigaos__ /* no async reaping: wait_process() uses waitpid() */
 	SIGACTMASK(SIGCHLD, remember_children);
+#endif
 #ifdef MAINTAINER_MODE
 	SIGACTMASK(SIGSEGV, rsync_panic_handler);
 	SIGACTMASK(SIGFPE, rsync_panic_handler);

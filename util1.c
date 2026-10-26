@@ -671,12 +671,17 @@ static int num_pids;
 /** Fork and record the pid of the child. **/
 pid_t do_fork(void)
 {
+#ifdef __amigaos__
+	errno = ENOSYS; /* every caller has an Amiga path that avoids fork() */
+	return -1;
+#else
 	pid_t newpid = fork();
 
 	if (newpid != 0  &&  newpid != -1) {
 		all_pids[num_pids++] = newpid;
 	}
 	return newpid;
+#endif
 }
 
 /**
@@ -711,6 +716,11 @@ void kill_all(int sig)
 /** Lock a byte range in a open file */
 int lock_range(int fd, int offset, int len)
 {
+#ifdef __amigaos__
+	/* ixemul has no record locking: "max connections" is not enforced. */
+	(void)fd; (void)offset; (void)len;
+	return 1;
+#else
 	struct flock lock;
 
 	lock.l_type = F_WRLCK;
@@ -720,6 +730,7 @@ int lock_range(int fd, int offset, int len)
 	lock.l_pid = 0;
 
 	return fcntl(fd,F_SETLK,&lock) == 0;
+#endif
 }
 
 #define ENSURE_MEMSPACE(buf, type, sz, req) \

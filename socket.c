@@ -756,9 +756,28 @@ void start_accept_loop(int port, int (*fn)(int, int))
 		if (fd < 0)
 			continue;
 
+#ifdef __amigaos__
+		while (waitpid(-1, NULL, WNOHANG) > 0) {} /* reap finished connections */
+#else
 		SIGACTION(SIGCHLD, sigchld_handler);
+#endif
 
+#ifdef __amigaos__
+		{
+			/* No fork(): serve the connection in a fresh copy of
+			 * ourselves that finds the socket on stdin (inetd mode). */
+			int cl[32], k = 0;
+			for (i = 0; sp[i] >= 0 && k < 30; i++)
+				cl[k++] = sp[i];
+			if (pid_file_fd >= 0)
+				cl[k++] = pid_file_fd;
+			cl[k] = -1;
+			pid = amiga_spawn_daemon_conn(fd, cl);
+		}
+		if (0) {
+#else
 		if ((pid = fork()) == 0) {
+#endif
 			int ret;
 			if (pid_file_fd >= 0)
 				close(pid_file_fd);
@@ -1063,7 +1082,12 @@ static int sock_exec(const char *prog)
 	if (DEBUG_GTE(CMD, 1))
 		rprintf(FINFO, "Running socket program: \"%s\"\n", prog);
 
+#ifdef __amigaos__
+	pid = -1;
+	errno = ENOSYS; /* RSYNC_CONNECT_PROG needs fork() */
+#else
 	pid = fork();
+#endif
 	if (pid < 0) {
 		rsyserr(FERROR, errno, "fork");
 		exit_cleanup(RERR_IPC);

@@ -361,6 +361,19 @@ void rwrite(enum logcode code, const char *buf, int len, int is_utf8)
 	if (len < 0)
 		exit_cleanup(RERR_MESSAGEIO);
 
+#ifdef __amigaos__
+	/* A replaying receiver repeats what its parent already did, messages
+	 * included.  Only an error is news: it means the replay went astray. */
+	if (amiga_replaying()) {
+		if (code == FERROR || code == FERROR_XFER || code == FERROR_UTF8) {
+			fputs("rsync (Amiga replay): ", stderr);
+			fwrite(buf, len, 1, stderr);
+			fflush(stderr);
+		}
+		return;
+	}
+#endif
+
 	if (msgs2stderr == 1) {
 		/* A normal daemon can get msgs2stderr set if the socket is busted, so we
 		 * change the message destination into an FLOG message in order to try to
