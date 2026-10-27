@@ -13,8 +13,23 @@ This branch ports current rsync (3.5.x, protocol 33) to classic AmigaOS
   macOS, Windows or another Amiga.
 
 Tested in FS-UAE (A1200, 68030/68882, Kickstart 40.68, Workbench 40.42,
-UAE bsdsocket.library) against rsync 3.5.1, 3.2.7, 3.1.3, 3.0.9 and
-2.6.9 on Linux. Real hardware has not been tested yet.
+UAE bsdsocket.library):
+
+- local: first copy, no-op rerun, delta transfer with `--delete`,
+  `--checksum`, a 400-file tree;
+- against rsync 3.5.1, 3.2.7, 3.1.3, 3.0.9 and 2.6.9 on Linux: Amiga
+  client push and pull to the Linux daemon, Linux client push and pull
+  to the Amiga daemon, each with a first copy and a delta transfer with
+  `--delete`;
+- Amiga to Amiga (two emulator instances): module list, push and pull
+  with `-z`, push with `--exclude` and `--delete-excluded`.
+
+All results were byte-identical to the source. Real hardware has not
+been tested yet.
+
+Known issue: in one of four Amiga-to-Amiga runs, a push with `--exclude`
+stalled right after the daemon accepted the connection. It did not
+happen again in three repeats and is not understood yet.
 
 ## What does not work
 
