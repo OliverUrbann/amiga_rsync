@@ -3,6 +3,28 @@
 This branch ports current rsync (3.5.x, protocol 33) to classic AmigaOS
 3.1 and later on a 68020 or better, using ixemul.library.
 
+## Quick start: the command to use
+
+For backups and restores between the Amiga and another machine, use
+**`-rtX`**:
+
+    rsync -rtX /Work/ rsync://server/module/work/       backup
+    rsync -rtX rsync://server/module/work/ /Work/       restore
+
+- `-r` recurses, `-t` keeps the dates (needed so the next run only sends
+  changes), `-X` keeps the **file comments and protection bits**.
+- **Without `-X`, restored files get their protection bits from the Unix
+  mode on the server, and programs usually lose their `e` bit: they will
+  no longer start.** Back up and restore with `-X`, both ways.
+- **Do not use `-a` or `-p`.** They set the protection bits from the Unix
+  mode *after* `-X` has set them, so `h`, `s`, `p`, `a` and usually `e`
+  are lost again.
+- `-X` needs rsync 3.0 or newer with xattr support on the other side
+  (e.g. Ubuntu's rsync). With an older server, leave `-X` out and expect
+  to fix protection bits by hand after a restore.
+
+Details in "File comments and protection bits" below.
+
 ## What works
 
 - Local copies (`rsync -rt /Work/src/ /DH1/backup/`), including delta
@@ -105,9 +127,11 @@ Notes:
 - **Do not combine `-X` with `-p`.** `-p` makes ixemul turn the Unix mode
   into protection bits after the attributes were set, which loses `h`,
   `s`, `p` and `a` and usually `e`. `-X` alone is what you want.
-- Without `-X`, files that arrive on the Amiga get protection bits from
-  their Unix mode via ixemul, so a file without the Unix x bit loses `e`:
-  restore programs with `-X`.
+- **Without `-X`, files that arrive on the Amiga get protection bits from
+  their Unix mode via ixemul**, so a file without the Unix x bit loses
+  `e` and a program no longer starts. Restore with `-X`. Files backed up
+  without `-X` have no attributes on the server; restoring them with `-X`
+  gives them the default `----rwed`.
 - Other `user.*` attributes coming from Linux are ignored on the Amiga.
 - Changing only a comment or the bits is detected: rsync itemizes it as
   `.f........x` and sends just the attribute.
