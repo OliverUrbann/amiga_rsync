@@ -2054,7 +2054,22 @@ int do_rename(const char *old_path, const char *new_path)
 {
 	if (dry_run) return 0;
 	RETURN_ERROR_IF_RO_OR_LO;
+#ifdef __amigaos__
+	{
+		/* AmigaDOS's Rename() never replaces an existing target, so
+		 * remove a file in the way and try again.  Unlike on Unix this
+		 * is not atomic: a crash in between leaves only the temp file. */
+		STRUCT_STAT st;
+		int ret = rename(old_path, new_path);
+		if (ret == 0 || do_lstat(new_path, &st) < 0 || S_ISDIR(st.st_mode))
+			return ret;
+		if (unlink(new_path) < 0)
+			return -1;
+		return rename(old_path, new_path);
+	}
+#else
 	return rename(old_path, new_path);
+#endif
 }
 
 /*

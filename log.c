@@ -37,6 +37,10 @@ extern int am_server;
 extern int am_sender;
 extern int am_generator;
 extern int local_server;
+#ifdef __amigaos__
+extern int amiga_local_xfer;
+#define local_server (local_server || amiga_local_xfer)
+#endif
 extern int quiet;
 extern int module_id;
 extern int allow_8bit_chars;
@@ -362,6 +366,7 @@ void rwrite(enum logcode code, const char *buf, int len, int is_utf8)
 		exit_cleanup(RERR_MESSAGEIO);
 
 #ifdef __amigaos__
+	amiga_trace_msg(code, buf, len);
 	/* A replaying receiver repeats what its parent already did, messages
 	 * included.  Only an error is news: it means the replay went astray. */
 	if (amiga_replaying()) {

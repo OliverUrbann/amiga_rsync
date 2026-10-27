@@ -200,8 +200,10 @@ NORETURN void _exit_cleanup(int code, const char *file, int line)
 
 		if (cleanup_fname)
 			do_unlink_at(cleanup_fname);
+#ifndef __amigaos__ /* no signals on Amiga: children see their pipes close */
 		if (exit_code)
 			kill_all(SIGUSR1);
+#endif
 		if (cleanup_pid && cleanup_pid == getpid()) {
 			char *pidf = lp_pid_file();
 			if (pidf && *pidf)

@@ -117,6 +117,9 @@ gid_t our_gid;
 int am_receiver = 0;  /* Only set to 1 after the receiver/generator fork. */
 int am_generator = 0; /* Only set to 1 after the receiver/generator fork. */
 int local_server = 0;
+#ifdef __amigaos__
+int amiga_local_xfer = 0; /* local copy, run like a remote one */
+#endif
 int daemon_connection = 0; /* 0 = no daemon, 1 = daemon via remote shell, -1 = daemon via socket */
 mode_t orig_umask = 0;
 int batch_gen_fd = -1;
@@ -688,6 +691,11 @@ static pid_t do_cmd(char *cmd, char *machine, char *user, char **remote_argv, in
 				rsyserr(FERROR, errno, "failed to start %s", amiga_self_exe());
 				exit_cleanup(RERR_IPC);
 			}
+			/* The server is a separate process that shares nothing with
+			 * us (unlike a forked local child), so from here on talk to
+			 * it exactly as to a remote server. */
+			local_server = 0;
+			amiga_local_xfer = 1;
 		}
 #else
 		pid = local_child(argc, args, f_in_p, f_out_p, child_main);
@@ -1401,6 +1409,9 @@ int client_run(int f_in, int f_out, pid_t pid, int argc, char *argv[])
 	set_blocking(STDERR_FILENO);
 
 	if (am_sender) {
+#ifdef __amigaos__
+		amiga_stop_recording(); /* the client sends; no fork emulation needed */
+#endif
 		keep_dirlinks = 0; /* Must be disabled on the sender. */
 
 		if (always_checksum

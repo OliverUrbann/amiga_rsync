@@ -88,6 +88,13 @@ static void crash_handler(int sig, int code, struct sigcontext *scp)
 	_exit(128 + sig);
 }
 
+void amiga_trace_msg(int code, const char *buf, int len)
+{
+	while (len > 0 && buf[len-1] == '\n')
+		len--;
+	trace("msg %d%s: %.*s", code, suppress ? " (replay)" : "", len, buf);
+}
+
 static void die(const char *msg)
 {
 	trace("fatal: %s", msg);
@@ -244,6 +251,9 @@ void amiga_cleanup(void)
 {
 	char name[MAXPATHLEN], num[16];
 	int i;
+
+	if (getenv("RSYNC_AMIGA_KEEP")) /* keep records for debugging */
+		return;
 
 	if (mode == M_RECORD)
 		close_records(1);

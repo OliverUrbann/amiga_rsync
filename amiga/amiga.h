@@ -83,6 +83,7 @@ const char *amiga_self_exe(void);
  * through a pipe instead. */
 int amiga_tell_receiver_wrapup(pid_t pid);
 void amiga_check_wrapup(void);
+void amiga_trace_msg(int code, const char *buf, int len);
 int amiga_cwd_name(char *buf, int len); /* amiga_dos.c */
 
 /* ixemul declares getgroups(int, int *); configure assumes gid_t when cross
