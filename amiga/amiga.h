@@ -104,6 +104,23 @@ static inline struct tm *amiga_localtime_r(const time_t *t, struct tm *res)
 }
 #define localtime_r amiga_localtime_r
 
+/* No *at() calls in ixemul.  rsync only reaches these with a held dir fd,
+ * which it never has on Amiga (dir fds are always -1), but the xattr code
+ * still has to compile. */
+#include <errno.h>
+static inline int amiga_openat(int dfd, const char *path, int flags, ...)
+{
+	(void)dfd; (void)path; (void)flags;
+	errno = ENOSYS;
+	return -1;
+}
+#define openat amiga_openat
+
+/* "no such attribute" for the xattr code; ixemul has no ENOATTR/ENODATA. */
+#ifndef ENOATTR
+#define ENOATTR 93
+#endif
+
 #ifndef AMIGA_NO_WRAP
 #undef read
 #undef write

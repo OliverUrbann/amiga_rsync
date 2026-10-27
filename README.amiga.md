@@ -5,10 +5,11 @@ This branch ports current rsync (3.5.x, protocol 33) to classic AmigaOS
 
 ## What works
 
-- Local copies (`rsync -av Work:src/ DH1:backup/`), including delta
+- Local copies (`rsync -rt /Work/src/ /DH1/backup/`), including delta
   transfers, `--delete`, `--checksum`, `--stats`, filters, compression.
-- rsync daemon client: `rsync -av Work:src/ rsync://host/module/` and
+- rsync daemon client: `rsync -rt /Work/src/ rsync://host/module/` and
   the other direction, against current and old rsync versions.
+- File comments and protection bits, **only with `-X`**, see below.
 - rsync daemon server: `rsync --daemon` on the Amiga, used from Linux,
   macOS, Windows or another Amiga.
 
@@ -24,8 +25,8 @@ UAE bsdsocket.library):
 - Amiga to Amiga (two emulator instances): module list, push and pull
   with `-z`, push with `--exclude` and `--delete-excluded`.
 
-All results were byte-identical to the source. Real hardware has not
-been tested yet.
+All results were byte-identical to the source. It also runs on real
+hardware (Vampire, 68080).
 
 Known issue: in one of four Amiga-to-Amiga runs, a push with `--exclude`
 stalled right after the daemon accepted the connection. It did not
@@ -41,7 +42,7 @@ happen again in three repeats and is not understood yet.
   record locking).
 - Ownership, uid/gid mapping, `chroot`: AmigaOS has no users. rsync never
   runs as "root" here.
-- ACLs, xattrs, iconv, IPv6.
+- ACLs, Linux-style xattrs (other than the two below), iconv, IPv6.
 
 ## Installing
 
@@ -64,6 +65,57 @@ happen again in three repeats and is not understood yet.
    itself is optional).
 5. `T:` and `ENV:` must exist (the standard Startup-Sequence makes them).
 6. Give rsync enough room in `T:`: see "How it works" below.
+
+## File comments and protection bits (`-X`)
+
+AmigaDOS keeps a comment (`FileNote`) and protection bits (`hsparwed`,
+`Protect`) with every file and directory. Unix filesystems have neither,
+so by default rsync transfers only contents and modification times:
+
+    rsync -rt /Work/ rsync://server/backup/work/      <- no comments, no bits
+
+**Add `-X` to transfer them too.** The Amiga rsync then presents them as
+two extended attributes, which a Linux server stores in its filesystem
+(ext4, xfs, btrfs; the daemon module must be writable as usual):
+
+    rsync -rtX /Work/ rsync://server/backup/work/
+
+| On the Amiga        | On Linux (`getfattr -d file`)              |
+|---------------------|--------------------------------------------|
+| file comment        | `user.amiga.comment="Das List-Kommando"`   |
+| protection bits     | `user.amiga.protection="-sp-rwed"`         |
+
+The protection value is written the way `List` shows it: the letters
+`hsparwed` in that order, `-` for a flag that is not set (for `rwed`:
+not allowed). The default `----rwed` is not stored; a file without the
+attribute gets `----rwed` when it comes back. Comments are stored as the
+raw bytes (Latin-1), so umlauts look odd in a UTF-8 terminal but return
+unchanged.
+
+To restore, use `-X` again, in either direction:
+
+    rsync -rtX rsync://server/backup/work/ /Work/            (on the Amiga)
+    rsync -rtX /srv/backup/work/ rsync://amiga/module/       (on Linux)
+
+Notes:
+
+- **Both sides need `-X`**, which the client passes on to the server
+  automatically. A server older than rsync 3.0 (protocol 30), or one
+  built without xattr support, refuses `-X`; leave it out there.
+- **Do not combine `-X` with `-p`.** `-p` makes ixemul turn the Unix mode
+  into protection bits after the attributes were set, which loses `h`,
+  `s`, `p` and `a` and usually `e`. `-X` alone is what you want.
+- Without `-X`, files that arrive on the Amiga get protection bits from
+  their Unix mode via ixemul, so a file without the Unix x bit loses `e`:
+  restore programs with `-X`.
+- Other `user.*` attributes coming from Linux are ignored on the Amiga.
+- Changing only a comment or the bits is detected: rsync itemizes it as
+  `.f........x` and sends just the attribute.
+
+Tested on UAE's directory filesystem and on an FFS volume: local copies,
+push to and pull from a Linux daemon, Linux client to the Amiga daemon,
+reruns without changes, comment-only changes, restoring a C: command and
+running it.
 
 ## Usage notes
 
@@ -105,6 +157,13 @@ The generator tells the receiver to finish through a pipe rather than
 SIGUSR2, and children are reaped with `waitpid()` rather than SIGCHLD.
 
 ## Troubleshooting
+
+- `Empty destination arg specified (use "." or see --old-args)` for a
+  correct command line: an old ixemul.library is installed. Check with
+  `Version LIBS:ixemul.library`; it must be 80.1.
+- `Unknown module 'x'`: the first part after `rsync://host/` is the
+  module name from the server's rsyncd.conf. `rsync rsync://host/` lists
+  the modules.
 
     SetEnv RSYNC_AMIGA_TRACE RAM:rsync-trace.txt
 

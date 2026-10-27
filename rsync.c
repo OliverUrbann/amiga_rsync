@@ -552,7 +552,8 @@ int set_file_attrs(const char *fname, struct file_struct *file, stat_x *sxp,
 		leaf = slash ? slash + 1 : fname;
 	}
 
-#if defined SUPPORT_XATTRS || defined SUPPORT_ACLS
+#if (defined SUPPORT_XATTRS || defined SUPPORT_ACLS) && !defined __amigaos__
+	/* (AmigaOS: no *at() calls and no fd-based xattrs; the path is used.) */
 	/* Pin a regular-file/dir/fifo entry via the held dir fd with O_NOFOLLOW so
 	 * the xattr/ACL ops below act on the held inode (sys_f*xattr/fsetxattr),
 	 * not a re-resolved path a parent-symlink race could redirect.  O_NONBLOCK
@@ -804,6 +805,13 @@ int set_file_attrs(const char *fname, struct file_struct *file, stat_x *sxp,
 #endif
 
 #ifdef HAVE_CHMOD
+#ifdef __amigaos__
+	/* With -X the protection bits came as amiga.protection; a chmod here
+	 * would let ixemul overwrite them with its rendering of the Unix mode
+	 * (a 0644 file would lose its "e" bit).  Only -p asks for the mode. */
+	if (preserve_xattrs && !preserve_perms)
+		new_mode = sxp->st.st_mode;
+#endif
 	if (!BITS_EQUAL(sxp->st.st_mode, new_mode, CHMOD_BITS)) {
 		int ret = am_root < 0 ? 0
 			: op_leaf_fd >= 0 ? do_fchmod(op_leaf_fd, new_mode)

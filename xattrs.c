@@ -148,6 +148,9 @@ static int rsync_xal_compare_names(const void *x1, const void *x2)
  * can't redirect it; otherwise it falls back to the path (sys_llistxattr). */
 static ssize_t get_xattr_names(const char *fname, int fd)
 {
+#ifdef __amigaos__
+	fd = -1; /* sys_f*xattr() have nothing to work with on Amiga */
+#endif
 	ssize_t list_len;
 	int64 arg;
 
@@ -196,6 +199,9 @@ static ssize_t get_xattr_names(const char *fname, int fd)
  * back to the path (sys_lgetxattr), matching get_xattr_names(). */
 static char *get_xattr_data(const char *fname, int fd, const char *name, size_t *len_ptr, int no_missing_error)
 {
+#ifdef __amigaos__
+	fd = -1; /* sys_f*xattr() have nothing to work with on Amiga */
+#endif
 	size_t datum_len = fd >= 0 ? sys_fgetxattr(fd, name, NULL, 0)
 				   : sys_lgetxattr(fname, name, NULL, 0);
 	size_t extra_len = *len_ptr;
@@ -362,6 +368,9 @@ int copy_xattrs(const char *source, int source_fd, const char *dest, int dest_fd
 	char *name, *ptr;
 #ifdef HAVE_LINUX_XATTRS
 	int user_only = am_sender ? 0 : am_root <= 0;
+#endif
+#ifdef __amigaos__
+	source_fd = dest_fd = -1; /* no fd-based xattr calls on Amiga */
 #endif
 
 	/* This puts the name list into the "namebuf" buffer. */
@@ -994,6 +1003,9 @@ void uncache_tmp_xattrs(void)
 static int rsync_xal_set(const char *fname, item_list *xalp,
 			 const char *fnamecmp, stat_x *sxp, int fd)
 {
+#ifdef __amigaos__
+	fd = -1; /* no fd-based xattr calls on Amiga */
+#endif
 	rsync_xa *rxas = xalp->items;
 	ssize_t list_len;
 	size_t i, len;
@@ -1149,6 +1161,9 @@ int set_xattr(const char *fname, const struct file_struct *file, const char *fna
 	 * the perm change goes through fchmod() on the pinned inode rather than
 	 * re-resolving the path. */
 	if (!am_root
+#ifdef __amigaos__
+	 && 0 /* AmigaDOS sets comments and protection on write-protected files */
+#endif
 #ifdef SUPPORT_LINKS
 	 && !S_ISLNK(sxp->st.st_mode)
 #endif

@@ -417,6 +417,184 @@ ssize_t sys_flistxattr(int filedes, char *list, size_t size)
 	return list_xattr(attrdirfd, list, size);
 }
 
+#elif defined HAVE_AMIGA_XATTRS
+
+/* AmigaOS: the file comment and the protection bits appear as the xattrs
+ * "amiga.comment" and "amiga.protection" (rsync puts them in the "user."
+ * namespace on the wire, so a Linux receiver stores user.amiga.comment).
+ * Other names are accepted and ignored, so files coming from Linux with
+ * their own user.* attributes don't produce errors.  See amiga_dos.c. */
+
+#define AMIGA_XA_COMMENT "amiga.comment"
+#define AMIGA_XA_PROT "amiga.protection"
+
+int amiga_xa_get(const char *path, int which, char *buf, int size);
+int amiga_xa_set(const char *path, int which, const char *val, int len);
+
+/* ixemul path -> AmigaDOS path: "/Work/a/../b" -> "Work:a//b", "./x" -> "x". */
+static int ados_path(const char *in, char *out, size_t size)
+{
+	const char *p = in, *e;
+	size_t n = 0;
+	int first = 1;
+
+	if (*p == '/') {
+		while (*p == '/')
+			p++;
+		e = strchr(p, '/');
+		if (!e)
+			e = p + strlen(p);
+		if (e == p || (size_t)(e - p) + 2 > size)
+			return -1;
+		memcpy(out, p, e - p);
+		n = e - p;
+		out[n++] = ':';
+		p = e;
+	}
+	while (*p) {
+		size_t len;
+		while (*p == '/')
+			p++;
+		if (!*p)
+			break;
+		e = strchr(p, '/');
+		if (!e)
+			e = p + strlen(p);
+		len = e - p;
+		if (len == 1 && *p == '.') {
+			p = e;
+			continue;
+		}
+		if (!first || (n && out[n-1] != ':')) {
+			if (n + 1 >= size)
+				return -1;
+			out[n++] = '/';
+		}
+		first = 0;
+		if (len == 2 && p[0] == '.' && p[1] == '.')
+			len = 0;	/* AmigaDOS: an empty component is the parent */
+		if (n + len + 1 > size)
+			return -1;
+		memcpy(out + n, p, len);
+		n += len;
+		p = e;
+	}
+	out[n] = '\0';
+	return 0;
+}
+
+static int amiga_which(const char *name)
+{
+	if (strcmp(name, AMIGA_XA_COMMENT) == 0)
+		return 0;
+	if (strcmp(name, AMIGA_XA_PROT) == 0)
+		return 1;
+	return -1;
+}
+
+static int amiga_errno(int r)
+{
+	switch (r) {
+	case -1: errno = ENOATTR; break;
+	case -2: errno = ENOENT; break;
+	case -3: errno = ERANGE; break;
+	case -4: errno = EINVAL; break;
+	default: errno = EIO; break;
+	}
+	return -1;
+}
+
+ssize_t sys_lgetxattr(const char *path, const char *name, void *value, size_t size)
+{
+	char apath[MAXPATHLEN];
+	int which = amiga_which(name), r;
+
+	if (which < 0)
+		return amiga_errno(-1);
+	if (ados_path(path, apath, sizeof apath) < 0)
+		return amiga_errno(-2);
+	r = amiga_xa_get(apath, which, value, size);
+	return r < 0 ? amiga_errno(r) : r;
+}
+
+int sys_lsetxattr(const char *path, const char *name, const void *value, size_t size)
+{
+	char apath[MAXPATHLEN];
+	int which = amiga_which(name), r;
+
+	if (which < 0)
+		return 0;	/* nowhere to keep it on AmigaOS; ignore */
+	if (ados_path(path, apath, sizeof apath) < 0)
+		return amiga_errno(-2);
+	r = amiga_xa_set(apath, which, value, size);
+	return r < 0 ? amiga_errno(r) : 0;
+}
+
+int sys_lremovexattr(const char *path, const char *name)
+{
+	char apath[MAXPATHLEN];
+	int which = amiga_which(name), r;
+
+	if (which < 0)
+		return 0;
+	if (ados_path(path, apath, sizeof apath) < 0)
+		return amiga_errno(-2);
+	r = amiga_xa_set(apath, which, NULL, 0);
+	return r < 0 ? amiga_errno(r) : 0;
+}
+
+ssize_t sys_llistxattr(const char *path, char *list, size_t size)
+{
+	static const char *names[2] = { AMIGA_XA_COMMENT, AMIGA_XA_PROT };
+	char apath[MAXPATHLEN];
+	size_t len = 0;
+	int which, r;
+
+	if (ados_path(path, apath, sizeof apath) < 0)
+		return amiga_errno(-2);
+	for (which = 0; which < 2; which++) {
+		size_t nlen = strlen(names[which]) + 1;
+		r = amiga_xa_get(apath, which, NULL, 0);
+		if (r == -1)
+			continue;
+		if (r < 0)
+			return amiga_errno(r);
+		if (size) {
+			if (len + nlen > size)
+				return amiga_errno(-3);
+			memcpy(list + len, names[which], nlen);
+		}
+		len += nlen;
+	}
+	return len;
+}
+
+/* rsync only uses these with a held fd, which the Amiga build never passes
+ * (see xattrs.c); there is no name for an ixemul fd to go by. */
+ssize_t sys_fgetxattr(UNUSED(int filedes), UNUSED(const char *name), UNUSED(void *value), UNUSED(size_t size))
+{
+	errno = ENOTSUP;
+	return -1;
+}
+
+int sys_fsetxattr(UNUSED(int filedes), UNUSED(const char *name), UNUSED(const void *value), UNUSED(size_t size))
+{
+	errno = ENOTSUP;
+	return -1;
+}
+
+int sys_fremovexattr(UNUSED(int filedes), UNUSED(const char *name))
+{
+	errno = ENOTSUP;
+	return -1;
+}
+
+ssize_t sys_flistxattr(UNUSED(int filedes), UNUSED(char *list), UNUSED(size_t size))
+{
+	errno = ENOTSUP;
+	return -1;
+}
+
 #else
 
 #error You need to create xattr compatibility functions.
