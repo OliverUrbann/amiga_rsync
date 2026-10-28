@@ -141,6 +141,34 @@ push to and pull from a Linux daemon, Linux client to the Amiga daemon,
 reruns without changes, comment-only changes, restoring a C: command and
 running it.
 
+## Linux files on an Amiga
+
+The intended direction is the Amiga backing up to a Unix machine. The
+other way round (a Linux client writing to an Amiga daemon, or pulling
+Linux files onto the Amiga) keeps file **contents, the directory tree and
+modification times**, but little else:
+
+- Lost: owner and group (AmigaOS has no users), symlinks, hard links,
+  device files, FIFOs, ACLs and extended attributes (only the two
+  `amiga.*` names above are kept).
+- Approximated: permissions with `-p` (ixemul maps `rwx` to `rwed`;
+  group and other are dropped).
+
+Some files cannot be stored correctly at all:
+
+- Names differing only in case (`README` and `Readme`): AmigaDOS does not
+  tell them apart, so one overwrites the other.
+- Names longer than the filesystem allows (30 characters on FFS; more on
+  PFS3, SFS or FFS2/`DOS\7`) fail.
+- Names containing `:` cannot be created.
+- Files of 2 GB or more (this build has 32-bit file sizes).
+- Dates before 1 January 1978, the start of Amiga time.
+
+To keep Linux files intact on an Amiga, pack them on Linux first
+(`tar czf backup.tar.gz ...`) and transfer the archive.
+
+None of this was tested beyond plain files.
+
 ## Usage notes
 
 - Paths can be written Unix style (`/Work/src`) or Amiga style
