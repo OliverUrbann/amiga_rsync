@@ -106,13 +106,31 @@ static int text_to_prot(const char *t, int len, LONG *prot)
 	return 1;
 }
 
+/* No "Please insert volume" requester while rsync works unattended:
+ * a missing volume is an error, not a reason to wait for the user. */
+static APTR no_requesters(void)
+{
+	struct Process *me = (struct Process *)FindTask(NULL);
+	APTR old = me->pr_WindowPtr;
+	me->pr_WindowPtr = (APTR)-1;
+	return old;
+}
+
+static void restore_requesters(APTR old)
+{
+	((struct Process *)FindTask(NULL))->pr_WindowPtr = old;
+}
+
 static int examine(const char *path, struct FileInfoBlock *fib)
 {
+	APTR win = no_requesters();
 	BPTR lock = Lock((CONST_STRPTR)path, SHARED_LOCK);
+	LONG err = IoErr();
 	int ok;
+	restore_requesters(win);
 	if (!lock)
-		return IoErr() == ERROR_OBJECT_NOT_FOUND || IoErr() == ERROR_DIR_NOT_FOUND
-		     ? AXA_NOENT : AXA_IO;
+		return err == ERROR_OBJECT_NOT_FOUND || err == ERROR_DIR_NOT_FOUND
+		     || err == ERROR_DEVICE_NOT_MOUNTED ? AXA_NOENT : AXA_IO;
 	ok = Examine(lock, fib);
 	UnLock(lock);
 	return ok ? 0 : AXA_IO;

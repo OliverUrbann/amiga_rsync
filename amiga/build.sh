@@ -60,7 +60,7 @@ rsync_cv_have_sockaddr_un=no
 EOF
 
 CC="m68k-amigaos-gcc -mcrt=ixemul -m$cpu" \
-CFLAGS="-std=gnu17 -fgnu89-inline -DSUPPORT_XATTRS=1 -DHAVE_AMIGA_XATTRS=1 -DENOTSUP=EOPNOTSUPP -DEOVERFLOW=ERANGE ${CFLAGS:--O2 -fomit-frame-pointer}" \
+CFLAGS="-std=gnu17 -fgnu89-inline -DSUPPORT_XATTRS=1 -DHAVE_AMIGA_XATTRS=1 -DNO_SYMLINK_XATTRS=1 -DENOTSUP=EOPNOTSUPP -DEOVERFLOW=ERANGE ${CFLAGS:--O2 -fomit-frame-pointer}" \
 "$srcdir/configure" --host=m68k-amigaos --cache-file=amiga.cache \
 	--disable-ipv6 --disable-xxhash --disable-zstd --disable-lz4 \
 	--disable-openssl --disable-iconv --disable-iconv-open \

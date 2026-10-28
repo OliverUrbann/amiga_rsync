@@ -167,7 +167,8 @@ rsync handles them like on Unix, but only when asked:
   its own whose files are hard links to the originals, so nothing is
   stored twice, but the directory itself is no longer one object.
 
-For a full backup use `rsync -rtXlH`.
+For a full backup use `rsync -rtXlH`. Soft links themselves carry no
+comment or protection bits in the backup (only their targets do).
 
 Notes: soft links sent from the Amiga carry no date (ixemul reports
 none), so they show 1970 on Linux. A Linux daemon with `use chroot = no`
