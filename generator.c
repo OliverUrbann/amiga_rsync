@@ -2156,6 +2156,17 @@ static void recv_generator(char *fname, struct file_struct *file, int ndx,
 		goto cleanup;
 	}
 
+#ifdef __amigaos__
+	/* See make_file(): AmigaOS can't write files of 2 GB or more. */
+	if (S_ISREG(file->mode) && F_LENGTH(file) > 0x7FFFFFFF) {
+		if (solo_file)
+			fname = f_name(file, NULL);
+		rprintf(FERROR_XFER, "skipping %s: files of 2 GB or more are not supported on AmigaOS\n",
+			full_fname(fname));
+		goto cleanup;
+	}
+#endif
+
 	if (max_size >= 0 && F_LENGTH(file) > max_size) {
 		if (INFO_GTE(SKIP, 1)) {
 			if (solo_file)

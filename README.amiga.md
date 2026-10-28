@@ -65,6 +65,12 @@ happen again in three repeats and is not understood yet.
 - Ownership, uid/gid mapping, `chroot`: AmigaOS has no users. rsync never
   runs as "root" here.
 - ACLs, Linux-style xattrs (other than the two below), iconv, IPv6.
+- **Files of 2 GB or more.** AmigaOS 3.x and ixemul use 32-bit signed
+  file sizes. rsync skips such files with "files of 2 GB or more are not
+  supported on AmigaOS" and exits with code 23; everything else is
+  transferred. (Before amiga3 they silently arrived empty.) Files of
+  4 GB or more on PFS3/SFS may report a wrapped-around size and cannot
+  be detected; keep such files out of rsync transfers.
 
 ## Installing
 
@@ -161,7 +167,7 @@ Some files cannot be stored correctly at all:
 - Names longer than the filesystem allows (30 characters on FFS; more on
   PFS3, SFS or FFS2/`DOS\7`) fail.
 - Names containing `:` cannot be created.
-- Files of 2 GB or more (this build has 32-bit file sizes).
+- Files of 2 GB or more: skipped with an error (see above).
 - Dates before 1 January 1978, the start of Amiga time.
 
 To keep Linux files intact on an Amiga, pack them on Linux first

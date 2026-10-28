@@ -1791,6 +1791,18 @@ struct file_struct *make_file(const char *fname, struct file_list *flist,
 	linkname_len = 0;
 #endif
 
+#ifdef __amigaos__
+	/* AmigaOS 3.x and ixemul use 32-bit signed file sizes: a file of 2 GB
+	 * or more shows a negative size here and cannot be read correctly
+	 * (it would arrive empty).  Refuse it loudly instead. */
+	if (S_ISREG(st.st_mode) && st.st_size < 0) {
+		rprintf(FERROR_XFER, "skipping %s: files of 2 GB or more are not supported on AmigaOS\n",
+			full_fname(thisname));
+		io_error |= IOERR_GENERAL;
+		return NULL;
+	}
+#endif
+
 	if (copy_devices && am_sender && IS_DEVICE(st.st_mode)) {
 		if (st.st_size == 0) {
 			int fd = do_open_checklinks(fname);
