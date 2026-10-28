@@ -211,8 +211,11 @@ None of this was tested beyond plain files.
 
 ## Usage notes
 
-- Paths can be written Unix style (`/Work/src`) or Amiga style
-  (`Work:src`).
+- **Write paths Unix style, as for every ixemul program:** `/Work/src/`
+  for `Work:src/`, `/RAM/` for `RAM:`, relative paths as usual. An Amiga
+  path like `Work:src` does not work: rsync reads `name:path` as a
+  remote host for ssh and fails with "remote command not found" (code
+  127). With `-R`, the path is kept on the destination as `Work/src/...`.
 - rsync's exit codes are often 10 or more (for example 23 = partial
   transfer). AmigaDOS scripts stop at return codes from 10 on, so put
   `FailAt 1000` before rsync in scripts that should continue.
