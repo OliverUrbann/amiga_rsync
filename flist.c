@@ -1867,9 +1867,15 @@ struct file_struct *make_file(const char *fname, struct file_list *flist,
 
 #ifdef SUPPORT_HARD_LINKS
 	if (preserve_hard_links && flist && flist->prev) {
+#ifdef __amigaos__
+		/* ixemul always reports st_nlink == 1, but a hard link and its
+		 * target share st_ino, so consider every file a candidate. */
+		if (S_ISREG(st.st_mode)) {
+#else
 		if (protocol_version >= 28
 		 ? (!S_ISDIR(st.st_mode) && st.st_nlink > 1)
 		 : S_ISREG(st.st_mode)) {
+#endif
 			tmp_dev = (int64)st.st_dev;
 			tmp_ino = (int64)st.st_ino;
 		} else

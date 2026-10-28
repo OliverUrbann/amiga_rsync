@@ -11,6 +11,8 @@ For backups and restores between the Amiga and another machine, use
     rsync -rtX /Work/ rsync://server/module/work/       backup
     rsync -rtX rsync://server/module/work/ /Work/       restore
 
+(add `-lH` if the disk contains soft or hard links, see "Links").
+
 - `-r` recurses, `-t` keeps the dates (needed so the next run only sends
   changes), `-X` keeps the **file comments and protection bits**.
 - **Without `-X`, restored files get their protection bits from the Unix
@@ -147,6 +149,37 @@ push to and pull from a Linux daemon, Linux client to the Amiga daemon,
 reruns without changes, comment-only changes, restoring a C: command and
 running it.
 
+## Links (`-l`, `-H`)
+
+AmigaDOS has soft links and hard links (to files and to directories).
+rsync handles them like on Unix, but only when asked:
+
+- **Without `-l` and `-H`** (plain `-rt`/`-rtX`): soft links are skipped
+  ("skipping non-regular file"), hard links are copied as independent
+  files. A hard-linked directory is copied twice.
+- **`-l`** transfers soft links as links, in both directions. Targets
+  are converted between Amiga and Unix form by ixemul (`Work:x` <->
+  `/Work/x`; relative targets stay relative). A link from Linux pointing
+  to something like `/etc/hostname` becomes a dangling `etc:hostname`.
+- **`-H`** keeps hard links to files, in both directions: on Linux they
+  become ordinary hard links, on the Amiga real AmigaDOS hard links. A
+  hard link to a **directory** (Unix has none) arrives as a directory of
+  its own whose files are hard links to the originals, so nothing is
+  stored twice, but the directory itself is no longer one object.
+
+For a full backup use `rsync -rtXlH`.
+
+Notes: soft links sent from the Amiga carry no date (ixemul reports
+none), so they show 1970 on Linux. A Linux daemon with `use chroot = no`
+prefixes link targets with `/rsyncd-munged/` ("munge symlinks", a
+security default); set `munge symlinks = no` in a trusted setup or use
+`use chroot = yes`. Note that `MakeLink` of OS 3.1 creates hard links.
+
+Tested on FFS: Amiga soft and hard links (file and directory) pushed to
+a Linux daemon and copied locally, Linux symlinks (relative, absolute,
+to a directory) and hard links pulled onto the Amiga, reruns without
+changes.
+
 ## Linux files on an Amiga
 
 The intended direction is the Amiga backing up to a Unix machine. The
@@ -154,9 +187,9 @@ other way round (a Linux client writing to an Amiga daemon, or pulling
 Linux files onto the Amiga) keeps file **contents, the directory tree and
 modification times**, but little else:
 
-- Lost: owner and group (AmigaOS has no users), symlinks, hard links,
-  device files, FIFOs, ACLs and extended attributes (only the two
-  `amiga.*` names above are kept).
+- Lost: owner and group (AmigaOS has no users), device files, FIFOs,
+  ACLs and extended attributes (only the two `amiga.*` names above are
+  kept). Symlinks and hard links survive with `-l`/`-H`, see above.
 - Approximated: permissions with `-p` (ixemul maps `rwx` to `rwed`;
   group and other are dropped).
 
