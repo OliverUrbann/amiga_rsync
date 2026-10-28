@@ -247,6 +247,13 @@ file lists it grows with the list, so `T:` needs space for it.
 The generator tells the receiver to finish through a pipe rather than
 SIGUSR2, and children are reaped with `waitpid()` rather than SIGCHLD.
 
+## Planned
+
+- **Files of 2 GB or more** on filesystems that can store them (PFS3,
+  SFS): use their 64-bit DOS packets for size and seek instead of
+  ixemul's 32-bit calls, keep the current error on FFS, and detect sizes
+  of 4 GB or more reliably. Test with pfs3aio in FS-UAE.
+
 ## Troubleshooting
 
 - `Empty destination arg specified (use "." or see --old-args)` for a
