@@ -56,6 +56,77 @@ Known issue: in one of four Amiga-to-Amiga runs, a push with `--exclude`
 stalled right after the daemon accepted the connection. It did not
 happen again in three repeats and is not understood yet.
 
+## Tested options
+
+Everything in this table was run in the emulator and the result checked
+(contents, dates and, where noted, protection bits and comments). An
+option that is not listed may well work; it has just not been tested
+here yet. Paths are Unix style (`/Work/src/`), see "Usage notes".
+
+| Option / feature | Result | How to use it, notes |
+|---|---|---|
+| `-r -t` | works | The basic backup: `rsync -rt /Work/src/ rsync://host/module/src/`. `-t` keeps the dates, so the next run only sends changes. |
+| Local copy | works | `rsync -rt /Work/src/ /DH1/backup/`, first copy, rerun without changes, delta transfer. |
+| Daemon client, push and pull | works | `rsync://host/module/...`; against rsync 3.5.1, 3.2.7, 3.1.3, 3.0.9 and 2.6.9. |
+| Daemon server on the Amiga | works | `rsync --daemon --no-detach --config=...` with `use chroot = no`; used from Linux and from another Amiga. |
+| `-X` | works | Comments and protection bits, both directions, see below. **Use it for backups.** |
+| `-p` | partly | Only `r`, `w`, `e` (and `d` together with `w`), owner bits only, see below. |
+| `-l` | works | Soft links, both directions. |
+| `-H` | works | Hard links. A hard-linked directory arrives as a directory with hard-linked files. |
+| `-R` | works | `-R /Work/src /Work/src2/sub` keeps the source path below the destination. Optional. |
+| `-i` | works | Itemized changes. A changed comment or protection shows as `.f........x`. |
+| `--delete` | works | Local and with a daemon, together with the delta transfer. |
+| `--exclude`, `--delete-excluded` | works | Local and Amiga to Amiga. |
+| `-c` (`--checksum`) | works | Local. |
+| `-z` (compression) | works | Local and Amiga to Amiga, push and pull. |
+| `--stats` | works | |
+| `--progress` | works | Local, daemon push and pull. In a file the updates sit in one line, separated by carriage returns. |
+| `--info=progress2` | works | Total progress, daemon pull. |
+| `rsync rsync://host/` | works | Lists the modules of a daemon. |
+| `-a` | avoid | It contains `-p`. For backups use `-rtX` instead. |
+| `-n`, other options | not tested yet | |
+
+### Protection bits: `-X` against `-p`
+
+| | `-rtX` | `-rtp` |
+|---|---|---|
+| Comment | kept (`user.amiga.comment`) | lost |
+| Protection `r`, `w`, `e`, `d` | kept exactly | `r`, `w`, `e` kept; `w` and `d` travel together |
+| Protection `h`, `s`, `p`, `a` | kept | lost |
+| On the Linux server | files get the server's default mode (umask) | files get 0400 to 0700, no group or other bits |
+| Needs on the server | rsync 3.0+ with xattr support, writable module | nothing special |
+
+Do not combine `-X` and `-p`: `-p` overwrites the bits that `-X` has just set.
+
+What `-p` does, measured on an FFS volume (all 16 combinations of
+`r`, `w`, `e` and `d`, plus 26 Linux modes in the other direction):
+
+| Amiga to Linux | Linux mode |
+|---|---|
+| `r` | read (owner) |
+| `w` or `d` | write (owner) |
+| `e` | execute (owner) |
+| (group and other) | no bits at all, e.g. 0700 |
+
+| Linux to Amiga (owner bits count only) | Amiga |
+|---|---|
+| 0755, 0700 | `rwed` |
+| 0644, 0600 | `rw-d` (no `e`: not executable) |
+| 0555, 0500 | `r-e-` |
+| 0444, 0400 | `r---` |
+| 0100 | `--e-` |
+| 0070, 0007, 0000 | nothing |
+
+- The execute bit survives both ways, but a program on Linux needs the
+  **owner** x bit, otherwise it does not start on the Amiga.
+- Read and write are the same in both directions. A set Linux write bit
+  gives `w` *and* `d`, so a file with `d` but without `w` (or the other
+  way round) changes in a round trip. Directories always come back with
+  `e`.
+- Files without `r` cannot be read by rsync (there is no "root"): they
+  are skipped with "Permission denied" and the exit code is 23.
+- Reruns after a transfer with `-p` send nothing.
+
 ## What does not work
 
 - Transfers over a remote shell (`host:path` via ssh/rsh): there is no
