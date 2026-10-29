@@ -83,8 +83,24 @@ here yet. Paths are Unix style (`/Work/src/`), see "Usage notes".
 | `--progress` | works | Local, daemon push and pull. In a file the updates sit in one line, separated by carriage returns. |
 | `--info=progress2` | works | Total progress, daemon pull. |
 | `rsync rsync://host/` | works | Lists the modules of a daemon. |
+| `-n` (`--dry-run`) | works | Nothing is created or changed. |
+| `--list-only` | works | `rsync --list-only rsync://host/module/dir/` |
+| `--include`, `--exclude-from`, `-m` | works | `--include=*/ --include=*.txt --exclude=*` with `-m` (`--prune-empty-dirs`). Write patterns without quotes: the Amiga shell does not expand `*`. |
+| `--files-from=/RAM/list.txt` | works | One path per line, relative to the source. |
+| `--max-size`, `--min-size` | works | `--max-size=1M` |
+| `--size-only`, `-u`, `--ignore-existing` | works | Behave as on other systems. |
+| `--delete-before`, `--delete-after` | works | |
+| `--backup --suffix=.bak` | works | The old copy is kept as `name.bak` on the receiving side. |
+| `--remove-source-files` | works | The sent files are deleted on the Amiga. |
+| `--inplace`, `-W`, `--partial` | works | |
+| `--bwlimit=500` | works | 2 MB took 4 s at 500 KB/s. |
+| `-x` | works | |
+| `-h`, `--log-file=RAM:r.log` | works | |
+| `--timeout`, `--contimeout`, `--port` | works | |
+| `--password-file=/RAM/pw` | works | For daemon modules with `auth users`: `rsync://user@host/module/`. A wrong password gives "auth failed", exit code 5. Without `--password-file` rsync asks on the terminal. |
 | `-a` | avoid | It contains `-p`. For backups use `-rtX` instead. |
-| `-n`, other options | not tested yet | |
+
+To put a `*` into a file with the Amiga `Echo` command, double it: `Echo "**.tmp" >RAM:ex.txt` writes `*.tmp`.
 
 ### Protection bits: `-X` against `-p`
 
