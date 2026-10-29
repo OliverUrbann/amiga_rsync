@@ -52,6 +52,19 @@ int amiga_cwd_name(char *buf, int len)
 	return ok;
 }
 
+/* A shell or ENV: variable as dos.library sees it right now.  Returns its
+ * length, or -1 if it is not set. */
+int amiga_getvar(const char *name, char *buf, int size)
+{
+	LONG len;
+
+	if (!dos_open())
+		return -1;
+	len = GetVar((CONST_STRPTR)name, (STRPTR)buf, size, 0);
+	CloseLibrary((struct Library *)DOSBase);
+	return len < 0 ? -1 : (int)len;
+}
+
 /* ixemul's fixed GMT offset, read the way ix_init() reads it: the binary
  * variable ENV:IXGMTOFFSET (set by ixtimezone), 4 bytes of seconds plus a
  * flags byte.  0 when unset. */

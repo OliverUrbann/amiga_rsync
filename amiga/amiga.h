@@ -86,6 +86,7 @@ void amiga_check_wrapup(void);
 void amiga_trace_msg(int code, const char *buf, int len);
 int amiga_cwd_name(char *buf, int len); /* amiga_dos.c */
 long amiga_ix_gmt_offset(void);         /* amiga_dos.c */
+int amiga_getvar(const char *name, char *buf, int size); /* amiga_dos.c */
 
 /* File times between ixemul and real Unix time, see amiga.c. */
 #include <time.h>

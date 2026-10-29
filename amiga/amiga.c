@@ -238,6 +238,21 @@ void amiga_init(int argc, char *argv[])
 	for (i = 0; i < AMIGA_MAXFD; i++)
 		rec_fd[i] = rep_fd[i] = -1;
 
+	/* ixemul keeps a copy of ENV: and, after its first timer event, no
+	 * longer notices when ENV: changes, so a SetEnv after an earlier
+	 * ixemul program may be invisible to getenv() until a reboot.  Take
+	 * the variables that matter from dos.library instead. */
+	{
+		static const char *fresh[] = { "TZ", "RSYNC_PASSWORD", NULL };
+		char val[1024];
+		for (i = 0; fresh[i]; i++) {
+			if (amiga_getvar(fresh[i], val, sizeof val) >= 0)
+				setenv(fresh[i], val, 1);
+			else
+				unsetenv(fresh[i]);
+		}
+	}
+
 	if (getenv("RSYNC_AMIGA_TRACE")) {
 		(signal)(SIGBUS, (void (*)())crash_handler);
 		(signal)(SIGSEGV, (void (*)())crash_handler);

@@ -268,7 +268,8 @@ on each file's own date:
     SetEnv TZ CET-1CEST,M3.5.0,M10.5.0/3
     Copy ENV:TZ ENVARC:
 
-(the second line keeps it after a reboot). Other zones, e.g. UK
+(the second line keeps it after a reboot; `rbackup.rexx` below does
+this for you from two simple settings). Other zones, e.g. UK
 `GMT0BST,M3.5.0/1,M10.5.0`, US Eastern `EST5EDT,M3.2.0,M11.1.0`. Set it
 on every Amiga that runs rsync, also for the daemon. The Amiga clock has
 to show local time, including summer time.
@@ -291,6 +292,10 @@ from the server dated in the second one arrives as 02:30 and gets its
 date set again on every run. A date in the hour that does not exist in
 spring (02:00 to 03:00) comes back two hours later. `ENV:IXGMTOFFSET`
 (from ixemul's `ixtimezone`) is taken into account but was not tested.
+
+rsync reads `TZ` and `RSYNC_PASSWORD` through dos.library itself: ixemul
+keeps a copy of `ENV:` and may not notice a later `SetEnv` until the
+next reboot, so other ixemul programs can still see an old value.
 
 Tested with summer and winter dates: push to and pull from a Linux
 daemon, Linux client to the Amiga daemon, reruns, the migration with
@@ -315,8 +320,10 @@ with `rx rbackup.rexx`:
 - The password goes to rsync through `RSYNC_PASSWORD`, which the script
   removes again at the end. Anyone who can read the script can read the
   password.
-- The script sets `TZ` from its `timezone` setting. For an existing
-  backup made without a time zone, set `fixdates = 1` for one run.
+- The time zone is two settings: `utcoffset` (hours ahead of UTC in
+  winter, 1 for Germany) and `summertime` (`'EU'`, `'US'` or `'none'`);
+  the script turns them into `TZ`. For an existing backup made without a
+  time zone, set `fixdates = 1` for one run.
 - Drives that are not there are reported instead of bringing up an
   "insert volume" requester. A drawer needs `--mkpath` on the server
   side (rsync 3.2.3 or newer); the script adds it when needed.

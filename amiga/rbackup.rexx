@@ -20,10 +20,10 @@ backup.1 = 'Work:'
 backup.2 = 'DH0:'
 /* backup.3 = 'Data:Pictures' */
 
-/* Time zone of the Amiga clock, so the dates on the server are right.
-   Central Europe: 'CET-1CEST,M3.5.0,M10.5.0/3', UK: 'GMT0BST,M3.5.0/1,M10.5.0'.
-   Leave it empty to use ENV:TZ as it is. */
-timezone = 'CET-1CEST,M3.5.0,M10.5.0/3'
+/* Time zone of the Amiga clock, so the dates on the server are right. */
+utcoffset  = 1       /* hours ahead of UTC in winter: Germany 1, UK 0,
+                        Finland 2, New York -5; '' = use ENV:TZ as it is */
+summertime = 'EU'    /* 'EU' (all of Europe), 'US' or 'none' */
 
 /* Set to 1 for ONE run after you first set the time zone, if the server
    already holds a backup made without it: that run only corrects the
@@ -37,11 +37,15 @@ pause     = 30                /* seconds before the 1st retry, then 2x, 3x, ... 
 logfile   = 'RAM:rbackup.log' /* rsync's own log and the results of this script */
 requester = 1                 /* 1 = show a summary window at the end */
 rsync     = 'rsync'           /* the rsync program, e.g. 'C:rsync' */
+timezone  = ''                /* a full TZ value instead of utcoffset and
+                                 summertime, e.g. 'CET-1CEST,M3.5.0,M10.5.0/3' */
 
 /* ==================== End of settings ==================== */
 
 SIGNAL ON BREAK_C
 
+IF timezone = '' & utcoffset ~= '' THEN
+   timezone = make_tz(utcoffset, summertime)
 IF timezone ~= '' THEN
    ADDRESS COMMAND 'SetEnv TZ "'timezone'"'
 ELSE IF ~EXISTS('ENV:TZ') THEN
@@ -124,6 +128,34 @@ unix_path: PROCEDURE
    rest = STRIP(STRIP(rest, 'B', '/'))
    IF rest = '' THEN RETURN vol'/'
    RETURN vol'/'rest'/'
+
+/* utcoffset and summertime as a POSIX TZ value, e.g. 1 and 'EU' give
+   'STD-1DST,M3.5.0/2,M10.5.0/3'.  EU: last Sunday of March and of
+   October at 01:00 UTC; US: 2nd Sunday of March, 1st Sunday of November
+   at 02:00 local time. */
+make_tz: PROCEDURE
+   PARSE ARG off, st
+   tz = 'STD' || hours(-off)
+   SELECT
+      WHEN UPPER(st) = 'EU' THEN
+         RETURN tz'DST,M3.5.0/'hours(1 + off)',M10.5.0/'hours(2 + off)
+      WHEN UPPER(st) = 'US' THEN
+         RETURN tz'DST,M3.2.0,M11.1.0'
+      OTHERWISE
+         RETURN tz
+   END
+
+/* 1 -> '1', -5 -> '-5', 5.5 -> '5:30' */
+hours: PROCEDURE
+   PARSE ARG h
+   sign = ''
+   IF h < 0 THEN DO
+      sign = '-'
+      h = -h
+   END
+   m = (h - TRUNC(h)) * 60
+   IF m = 0 THEN RETURN sign || TRUNC(h)
+   RETURN sign || TRUNC(h)':'RIGHT(TRUNC(m), 2, '0')
 
 /* Exit codes worth another try: network, broken connection, timeouts. */
 retry_on: PROCEDURE
