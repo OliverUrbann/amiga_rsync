@@ -296,6 +296,38 @@ Tested with summer and winter dates: push to and pull from a Linux
 daemon, Linux client to the Amiga daemon, reruns, the migration with
 `--size-only`, and both edge cases above.
 
+## Backup script (`rbackup.rexx`)
+
+`amiga/rbackup.rexx` backs up several drives in one go and tries again
+when the network fails. Edit the settings at the top (server, module,
+user, password, time zone, one line per drive or drawer), then start it
+with `rx rbackup.rexx`:
+
+    backup.1 = 'Work:'
+    backup.2 = 'Data:Pictures'      -> module/Work/, module/Data/Pictures/
+
+- Network errors, broken connections and timeouts (exit codes 10, 12,
+  30, 35) are retried, by default 5 times with growing pauses. A failed
+  login stops the script; other errors are reported and not retried.
+- `--partial --timeout=120` are in the default options, so a retry
+  continues a large file and a stall becomes an error instead of
+  hanging.
+- The password goes to rsync through `RSYNC_PASSWORD`, which the script
+  removes again at the end. Anyone who can read the script can read the
+  password.
+- The script sets `TZ` from its `timezone` setting. For an existing
+  backup made without a time zone, set `fixdates = 1` for one run.
+- Drives that are not there are reported instead of bringing up an
+  "insert volume" requester. A drawer needs `--mkpath` on the server
+  side (rsync 3.2.3 or newer); the script adds it when needed.
+- Results go to the console, to the log file (with rsync's own log) and
+  to a summary window at the end.
+
+Tested in the emulator: two sources with a server that came up only
+after 25 s (three retries, then success), a whole volume and a drawer,
+a missing drive and drawer, a wrong password, `fixdates`, the summary
+window.
+
 ## Links (`-l`, `-H`)
 
 AmigaDOS has soft links and hard links (to files and to directories).

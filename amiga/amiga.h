@@ -127,7 +127,12 @@ static inline int amiga_openat(int dfd, const char *path, int flags, ...)
 #define ENOATTR 93
 #endif
 
+/* The current time, corrected like file times when TZ is set (log time
+ * stamps, "now" for comparisons). */
+time_t amiga_time(time_t *t);
+
 #ifndef AMIGA_NO_WRAP
+#define time(t) amiga_time(t)
 #undef read
 #undef write
 #undef poll

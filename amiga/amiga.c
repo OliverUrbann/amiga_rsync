@@ -209,6 +209,14 @@ time_t amiga_time_from_fs(time_t t)
 	return u == (time_t)-1 ? t : u;
 }
 
+time_t amiga_time(time_t *t)
+{
+	time_t now = amiga_time_from_fs(time(NULL));
+	if (t)
+		*t = now;
+	return now;
+}
+
 /* Real Unix time to the value ixemul's utimes() expects. */
 time_t amiga_time_to_fs(time_t u)
 {
