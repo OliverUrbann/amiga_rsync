@@ -1,0 +1,447 @@
+Short:        Sync and back up files to rsync servers
+Author:       Andrew Tridgell, Wayne Davison and others; Amiga port by
+              Oliver Urbann
+Uploader:     oliver.urbann@gmail.com (Oliver Urbann)
+Type:         comm/tcp
+Version:      3.5.1-amiga5
+Architecture: m68k-amigaos >= 3.1
+Requires:     dev/lib/ixemul-80.1-m68k.lha, 68020+, a TCP/IP stack
+Kurz:         Dateien mit rsync-Servern abgleichen
+
+rsync for AmigaOS 3.x
+=====================
+
+This is current rsync (3.5.1, protocol 33) for classic AmigaOS 3.1 and
+later on a 68020 or better, built on ixemul.library. It talks to the
+rsync on any current Linux, BSD or macOS machine, so you can back up your
+Amiga to a server and restore it again, send only what has changed, and
+run an rsync daemon on the Amiga itself.
+
+Unlike older Amiga ports it keeps what makes Amiga files Amiga files:
+file comments and protection bits (hsparwed) travel with -X and come back
+on a restore, soft and hard links are kept with -l and -H, and file
+dates are converted with your time zone, so they are right on the server
+all year round.
+
+It runs in FS-UAE and on real hardware (Vampire, 68080, Roadshow).
+
+Contents of the archive:
+
+  rsync              the program (68020, no FPU needed)
+  rsync.readme       this text
+  rbackup.rexx       ARexx script: back up several drives, with retries
+  rsync.1.txt        the rsync manual
+  rsyncd.conf.5.txt  the manual of the daemon configuration
+  COPYING            GNU General Public License version 3
+
+
+Quick start
+-----------
+
+For backups and restores between the Amiga and another machine, use
+-rtX:
+
+  rsync -rtX /Work/ rsync://server/module/Work/      backup
+  rsync -rtX rsync://server/module/Work/ /Work/      restore
+
+Add -lH if the disk contains soft or hard links (see "Links").
+
+- -r recurses, -t keeps the dates (needed so the next run only sends
+  changes), -X keeps the file comments and protection bits.
+- Without -X, restored files get their protection bits from the Unix
+  mode on the server, and programs usually lose their e bit: they no
+  longer start. Back up and restore with -X, both ways.
+- Do NOT use -a or -p. They set the protection bits from the Unix mode
+  after -X has set them, so h, s, p, a and usually e are lost again.
+- -X needs rsync 3.0 or newer with xattr support on the other side
+  (e.g. the rsync of Ubuntu or Debian). With an older server, leave -X
+  out and expect to fix protection bits by hand after a restore.
+- Set your time zone once, otherwise the dates on the server are one or
+  two hours off (see "Dates and time zones"). For Central Europe:
+
+    SetEnv TZ CET-1CEST,M3.5.0,M10.5.0/3
+    Copy ENV:TZ ENVARC:
+
+- Write paths Unix style: /Work/src/ for Work:src/, /RAM/ for RAM:.
+  "Work:src" does not work, rsync takes it for a remote host.
+- Or simply edit the settings in rbackup.rexx and start it with
+  "rx rbackup.rexx".
+
+
+Installation
+------------
+
+1. Copy rsync somewhere in your path, e.g. C:.
+2. Install ixemul 80.1 (dev/lib/ixemul-80.1-m68k.lha). Copy a MATCHING
+   PAIR of libraries to LIBS:, renamed:
+
+     Sys/libs/ixemul020.library  ->  LIBS:ixemul.library
+     Sys/libs/ixnet020.library   ->  LIBS:ixnet.library
+
+   (or the 040/060 pair for those CPUs). Do not use ixnet000.library
+   with ixemul000.library: in 80.1 they are different build variants and
+   networking silently stays off ("Function not implemented"). rsync is
+   built without FPU code, so use the non-fpu ixemul.
+3. A TCP/IP stack providing bsdsocket.library (Roadshow, AmiTCP, Miami,
+   or UAE's emulated one).
+4. ixnet opens AmiTCP:libs/usergroup.library in every ixemul program. If
+   AmiTCP: does not exist you get a "Please insert volume AmiTCP"
+   requester, so assign it, e.g. "Assign AmiTCP: SYS:" (the library
+   itself is optional).
+5. T: and ENV: must exist (the standard Startup-Sequence makes them).
+   rsync needs some room in T:, see "How it works".
+6. Set TZ to your time zone, see "Dates and time zones".
+
+On the server, an rsync daemon module for the backup, for example in
+/etc/rsyncd.conf on Linux:
+
+  [amiga]
+      path = /srv/backup/amiga
+      read only = no
+      uid = youruser
+      gid = youruser
+      auth users = amiga
+      secrets file = /etc/rsyncd.secrets
+
+with a line "amiga:yourpassword" in /etc/rsyncd.secrets (mode 600), and
+the backup goes to rsync://amiga@server/amiga/. The filesystem there
+must support extended attributes for -X (ext4, xfs and btrfs do).
+
+
+The backup script rbackup.rexx
+------------------------------
+
+rbackup.rexx backs up several drives in one go and tries again when the
+network fails. Edit the settings at the top, then start it from a Shell
+with "rx rbackup.rexx" (RexxMast must be running):
+
+  server   = 'myserver.example.org'  /* name or IP, may end in :port */
+  module   = 'amiga'
+  user     = 'amiga'
+  password = 'yourpassword'
+
+  backup.1 = 'Work:'                 -> amiga/Work/
+  backup.2 = 'Data:Pictures'         -> amiga/Data/Pictures/
+
+  utcoffset  = 1                     /* hours ahead of UTC in winter */
+  summertime = 'EU'                  /* 'EU', 'US' or 'none' */
+
+- Network errors, broken connections and timeouts (exit codes 10, 12,
+  30, 35) are retried, by default 5 times with growing pauses. A failed
+  login stops the script; other errors are reported and not retried.
+- --partial --timeout=120 are in the default options, so a retry
+  continues a large file and a stalled connection becomes an error
+  instead of hanging.
+- The time zone is two settings: utcoffset (1 for Germany, 0 for the
+  UK, 2 for Finland, -5 for New York) and summertime. The script turns
+  them into TZ.
+- fixdates = 1 is for ONE run after you set the time zone for the first
+  time, when the server already holds a backup made without it: that
+  run only corrects the dates (rsync --size-only) instead of reading
+  every file again. Then set it back to 0. A file that changed since the
+  old backup but kept exactly its size is not sent in that run.
+- The password goes to rsync through RSYNC_PASSWORD, which the script
+  removes again at the end. Anyone who can read the script can read the
+  password.
+- Drives that are not there are reported instead of bringing up an
+  "insert volume" requester. A drawer needs --mkpath on the server side
+  (rsync 3.2.3 or newer); the script adds it when needed.
+- Results go to the console, to the log file (with rsync's own log) and
+  to a summary window at the end.
+
+
+File comments and protection bits (-X)
+--------------------------------------
+
+AmigaDOS keeps a comment (FileNote) and protection bits (hsparwed,
+Protect) with every file and directory. Unix filesystems have neither,
+so by default rsync transfers only contents and dates. With -X the
+Amiga rsync presents them as two extended attributes, which a Linux
+server stores in its filesystem:
+
+  On the Amiga       On Linux (getfattr -d file)
+  file comment       user.amiga.comment="Das List-Kommando"
+  protection bits    user.amiga.protection="-sp-rwed"
+
+The protection value is written the way List shows it: the letters
+hsparwed in that order, "-" for a flag that is not set (for rwed: not
+allowed). The default ----rwed is not stored; a file without the
+attribute gets ----rwed when it comes back. Comments are stored as raw
+bytes (Latin-1), so umlauts look odd in a UTF-8 terminal but return
+unchanged.
+
+- Both sides need -X; the client passes it on to the server. A server
+  older than rsync 3.0, or one built without xattr support, refuses it.
+- Files backed up without -X have no attributes on the server; restoring
+  them with -X gives them the default ----rwed.
+- Changing only a comment or the bits is detected: rsync itemizes it as
+  ".f........x" and sends just the attribute.
+- Other user.* attributes coming from Linux are ignored on the Amiga.
+
+-X against -p:
+
+                        -rtX                   -rtp
+  comment               kept                   lost
+  r, w, e, d            kept exactly           r, w, e kept; w and d
+                                               travel together
+  h, s, p, a            kept                   lost
+  mode on the server    new files 0400..0700   always 0400..0700
+  server needs          rsync 3.0+, xattrs     nothing special
+
+What -p does (measured on FFS with all 16 combinations of r, w, e, d):
+Amiga r, w (or d), e become the owner's read, write, execute on Linux;
+group and other get nothing. Back on the Amiga only the owner bits
+count: 0755 and 0700 give rwed, 0644 and 0600 give rw-d (not
+executable!), 0555 gives r-e-, 0444 gives r---. Files without r cannot
+be read by rsync at all (there is no "root"): they are skipped with
+"Permission denied", exit code 23.
+
+
+Dates and time zones
+--------------------
+
+AmigaDOS keeps file dates in local time; Unix systems keep them in UTC.
+ixemul converts with one fixed offset that is normally not set, so
+without help a file saved at 13:00 Central European Time shows up on a
+Linux server as 14:00 (15:00 in summer).
+
+When the variable TZ says which time zone the Amiga clock is in, rsync
+converts the dates itself, with the rules that apply on each file's own
+date:
+
+  SetEnv TZ CET-1CEST,M3.5.0,M10.5.0/3      Central Europe
+  SetEnv TZ GMT0BST,M3.5.0/1,M10.5.0        UK
+  SetEnv TZ EST5EDT,M3.2.0,M11.1.0          US Eastern
+  Copy ENV:TZ ENVARC:                       keep it after a reboot
+
+Set it on every Amiga that runs rsync, also for the daemon. The Amiga
+clock has to show local time, including summer time.
+
+With TZ set, the dates on the server are right all year round, they come
+back unchanged on a restore, and nothing is sent again when the clock
+goes to or from summer time. Without TZ rsync behaves like the earlier
+versions: dates one or two hours ahead on the server, but stable.
+
+Existing backups: after setting TZ, the dates of all files on the server
+differ from the Amiga, and a normal run would read every file again.
+Run once with --size-only instead (or fixdates = 1 in rbackup.rexx):
+
+  rsync -rtX --size-only /Work/ rsync://server/module/Work/
+
+Limits: once a year the clock shows 02:00 to 03:00 twice. An Amiga file
+from that hour is taken as the first 02:30 (summer time); a file from the
+server dated in the second one arrives as 02:30 and gets its date set
+again on every run. A date in the hour that does not exist in spring
+comes back two hours later.
+
+rsync reads TZ and RSYNC_PASSWORD through dos.library itself: ixemul
+keeps a copy of ENV: and may not notice a later SetEnv until the next
+reboot, so other ixemul programs can still see an old value.
+
+
+Links (-l, -H)
+--------------
+
+- Without -l and -H (plain -rtX): soft links are skipped ("skipping
+  non-regular file"), hard links are copied as independent files.
+- -l transfers soft links as links, in both directions. Targets are
+  converted between Amiga and Unix form (Work:x <-> /Work/x; relative
+  targets stay relative).
+- -H keeps hard links to files, in both directions. A hard link to a
+  directory (Unix has none) arrives as a directory of its own whose files
+  are hard links to the originals.
+
+For a full backup use "rsync -rtXlH". Soft links sent from the Amiga
+carry no date (1970 on Linux). A Linux daemon with "use chroot = no"
+prefixes link targets with /rsyncd-munged/; set "munge symlinks = no" in
+a trusted setup. MakeLink of OS 3.1 creates hard links.
+
+
+Tested options
+--------------
+
+Everything listed was run in the emulator and the result checked. An
+option that is not listed may well work; it has just not been tested.
+
+  works          tested in every direction where it makes a difference
+  partly         works, with a limitation given in the notes
+  partly tested  worked where it was tested; the notes say what is not
+
+  Tested: L local copy on the Amiga, push Amiga client to Linux daemon,
+  pull Linux daemon to Amiga client, D Linux client to Amiga daemon,
+  AA Amiga to Amiga.
+
+  Option                     Result         Tested
+  -------------------------  -------------  -----------------------
+  -r -t                      works          L, push, pull, D, AA
+      Set TZ, otherwise the dates on the server are 1 or 2 hours off.
+  TZ (time zone)             partly         push, pull, D
+      See "Dates and time zones" for the limits. Local and AA not
+      tested.
+  local copy                 works          L
+  daemon client              works          push, pull
+      Against rsync 3.5.1, 3.2.7, 3.1.3, 3.0.9 and 2.6.9.
+  daemon on the Amiga        works          D, AA
+      "max connections" is not enforced.
+  -X                         works          L, push, pull, D
+  -p                         partly         push, pull
+      Only r, w, e (and d together with w), owner bits only.
+  -l                         partly         L, push, pull
+      Links sent from the Amiga have no date.
+  -H                         works          L, push, pull
+  -R                         partly tested  L
+      Not tested with a daemon.
+  -i                         works          L, push, pull, D
+  --delete                   works          L, push, pull, D
+  -c (--checksum)            works          L, push, pull
+  --exclude,                 partly tested  L, push, AA
+  --delete-excluded
+  --include, --exclude-from, partly tested  push
+  -m
+      Write patterns without quotes, the shell does not expand "*".
+      To put a "*" into a file with Echo, double it: Echo "**.tmp".
+  --files-from=/RAM/list     partly tested  push
+  -z (compression)           partly tested  L, AA
+      Not tested against Linux.
+  -n (--dry-run)             partly tested  push
+  --max-size, --min-size     partly tested  push
+  --size-only, -u,           partly tested  push
+  --ignore-existing
+  --delete-before/-after     partly tested  push
+  --backup --suffix=.bak     partly tested  push
+      Backups on the Amiga side not tested.
+  --remove-source-files      partly tested  push
+  --inplace, -W, --partial   partly tested  push
+      With the Amiga as receiver not tested; --partial not with an
+      interrupted transfer.
+  --bwlimit                  partly tested  push
+  -x                         partly tested  push
+      Stopping at other volumes not tested.
+  --timeout, --contimeout,   partly tested  push
+  --port
+      No timeout was actually triggered.
+  --password-file=/RAM/pw    works          push
+      For modules with "auth users": rsync://user@host/module/. A
+      wrong password gives "auth failed", exit code 5.
+  --stats, -h, --log-file    works          L, push
+  --progress                 works          L, push, pull
+  --info=progress2           works          pull
+  --list-only,               works          push, AA
+  rsync rsync://host/
+  -a                         avoid
+      It contains -p. Use -rtX instead.
+  files of 2 GB or more      not supported  L, push
+      Skipped with an error, exit code 23.
+
+"partly tested" mostly means that the Amiga as the receiving side (local
+copies, restores) has not been tried with that option yet.
+
+
+What does not work
+------------------
+
+- Files of 2 GB or more. AmigaOS 3.x and ixemul use 32-bit file sizes.
+  rsync skips such files with "files of 2 GB or more are not supported
+  on AmigaOS" and exits with code 23; everything else is transferred.
+  Files of 4 GB or more on PFS3/SFS may report a wrapped-around size and
+  cannot be detected; keep them out of rsync transfers.
+- Transfers over a remote shell (host:path via ssh/rsh): there is no
+  usable ssh for AmigaOS 3.x to start. Use an rsync daemon.
+- pre-xfer exec, post-xfer exec, early exec, name converter and
+  RSYNC_CONNECT_PROG: they need fork(). rsync reports an error.
+- "max connections" in rsyncd.conf is not enforced.
+- Ownership, uid/gid mapping, chroot: AmigaOS has no users.
+- ACLs, Linux-style xattrs (other than the two above), iconv, IPv6.
+
+Linux files on an Amiga keep their contents, directory tree and dates,
+but lose owner, group, device files and Linux xattrs. Names differing
+only in case overwrite each other, names longer than the filesystem
+allows (30 characters on FFS) and names containing ":" fail, dates
+before 1978 do not exist on the Amiga. To keep Linux files intact on an
+Amiga, pack them first (tar) and transfer the archive.
+
+
+Usage notes
+-----------
+
+- rsync's exit codes are often 10 or more (23 = some files not
+  transferred). AmigaDOS scripts stop at return codes from 10 on, so put
+  "FailAt 1000" before rsync in scripts that should continue.
+- Replacing a file is not atomic on AmigaOS: Rename() never overwrites,
+  so rsync deletes the old file first. A crash right then leaves only
+  the temporary .name.XXXXXX file.
+- Daemon on the Amiga: start it with
+
+    Run >NIL: rsync --daemon --no-detach --config=/S/rsyncd.conf
+
+  and use "use chroot = no" in rsyncd.conf. Paths in rsyncd.conf are Unix
+  style too (path = /Work/share).
+
+
+Troubleshooting
+---------------
+
+- "Empty destination arg specified" for a correct command line: an old
+  ixemul.library is installed. "Version LIBS:ixemul.library" must say
+  80.1.
+- "Function not implemented" on every network access: ixemul.library
+  and ixnet.library are not a matching pair (see Installation).
+- "Please insert volume AmiTCP": assign AmiTCP:, see Installation.
+- "Unknown module 'x'": the first part after rsync://host/ is the module
+  name from the server's rsyncd.conf. "rsync rsync://host/" lists them.
+- "remote command not found" (code 127): an Amiga path like Work:src was
+  read as a remote host. Write /Work/src.
+- To see what happens inside:
+
+    SetEnv RSYNC_AMIGA_TRACE RAM:rsync-trace.txt
+
+  makes every rsync process append to that file what the fork emulation
+  does, all of rsync's messages, and the address of a crash. Setting
+  RSYNC_AMIGA_KEEP as well keeps the record files in T:.
+
+
+How it works
+------------
+
+ixemul has no fork(), only vfork() followed by exec. A local copy starts
+the receiving side as a separate "rsync --server" process via vfork()
+and exec, connected by pipes. The receiving side splits into a generator
+and a receiver that need the same state (options, protocol, filter
+rules, file list); rsync gets this by record and replay: until the split
+the process records every byte it reads from a pipe or socket into T:,
+then starts itself again, and the new process replays the recording with
+its output suppressed and continues as the receiver on the inherited
+connection. Each part is an ordinary AmigaDOS process; nothing shares
+memory or DOS state. The recording is usually a few KB, but grows with
+very large file lists.
+
+
+History
+-------
+
+amiga5  Dates converted with the time zone (TZ), right on the server all
+        year round; rsync reads TZ and RSYNC_PASSWORD past ixemul's ENV:
+        cache; log time stamps fixed; rbackup.rexx. First Aminet
+        release.
+amiga4  -H keeps hard links (ixemul reports a link count of 1); -X with
+        -l no longer stops at an "insert volume" requester.
+amiga3  Files of 2 GB or more are refused with an error instead of
+        arriving empty.
+amiga2  File comments and protection bits with -X.
+amiga1  First release: local copies, daemon client and server.
+
+
+Source and licence
+------------------
+
+rsync is free software under the GNU General Public License version 3
+(see COPYING). The source of this port, with all Amiga changes, is at
+
+  https://github.com/OliverUrbann/amiga_rsync   (branch amigaos)
+
+The Amiga specific code is in amiga/ and in "#ifdef __amigaos__" blocks.
+It is built with the m68k-amigaos cross toolchain from
+https://github.com/AmigaPorts/amiga-gcc and amiga/build.sh.
+
+rsync was written by Andrew Tridgell and Paul Mackerras and is
+maintained by Wayne Davison; see https://rsync.samba.org/.
