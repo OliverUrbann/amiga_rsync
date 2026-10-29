@@ -24,6 +24,10 @@ For backups and restores between the Amiga and another machine, use
 - `-X` needs rsync 3.0 or newer with xattr support on the other side
   (e.g. Ubuntu's rsync). With an older server, leave `-X` out and expect
   to fix protection bits by hand after a restore.
+- **Set your time zone once** (from amiga5 on), otherwise the dates on
+  the server are one or two hours off: `SetEnv TZ CET-1CEST,M3.5.0,M10.5.0/3`
+  and `Copy ENV:TZ ENVARC:` (for Central Europe), see "Dates and time
+  zones".
 
 Details in "File comments and protection bits" below.
 
@@ -77,7 +81,8 @@ the Amiga daemon, **AA** Amiga to Amiga.
 
 | Option / feature | Result | Tested | Notes |
 |---|---|---|---|
-| `-r -t` | partly | L, push, pull, D, AA | Contents and dates arrive, reruns only send changes, round trips give the original dates back. **But on a Linux server the dates are one hour ahead** (the time-zone offset), probably because ixemul takes the Amiga clock as UTC. Not tested yet: setting a time zone, summer time changes. |
+| `-r -t` | works | L, push, pull, D, AA | Contents and dates arrive, reruns only send changes, round trips give the original dates back. Set `TZ`, otherwise the dates on the server are one or two hours ahead. |
+| `TZ` (time zone) | partly | push, pull, D | From amiga5 on. Right dates on the server all year round, see "Dates and time zones". Limits in the double hour in autumn and the missing hour in spring. Local copies and Amiga to Amiga not tested. |
 | Local copy | works | L | `rsync -rt /Work/src/ /DH1/backup/`: first copy, rerun without changes, delta transfer. |
 | Daemon client | works | push, pull | `rsync://host/module/...`; against rsync 3.5.1, 3.2.7, 3.1.3, 3.0.9 and 2.6.9. |
 | Daemon server on the Amiga | works | D, AA | `rsync --daemon --no-detach --config=...` with `use chroot = no`. `max connections` is not enforced. |
@@ -193,6 +198,7 @@ What `-p` does, measured on an FFS volume (all 16 combinations of
    itself is optional).
 5. `T:` and `ENV:` must exist (the standard Startup-Sequence makes them).
 6. Give rsync enough room in `T:`: see "How it works" below.
+7. Set `TZ` to your time zone, see "Dates and time zones" below.
 
 ## File comments and protection bits (`-X`)
 
@@ -246,6 +252,49 @@ Tested on UAE's directory filesystem and on an FFS volume: local copies,
 push to and pull from a Linux daemon, Linux client to the Amiga daemon,
 reruns without changes, comment-only changes, restoring a C: command and
 running it.
+
+## Dates and time zones (`TZ`)
+
+AmigaDOS keeps file dates in local time; Unix systems keep them in UTC.
+ixemul converts with one fixed offset that is normally not set at all,
+so without help a file saved at 13:00 Central European Time shows up on
+a Linux server as 14:00 (15:00 in summer), and summer time is never
+taken into account.
+
+From amiga5 on, rsync converts the dates itself when the variable `TZ`
+says which time zone the Amiga clock is in, using the rules that apply
+on each file's own date:
+
+    SetEnv TZ CET-1CEST,M3.5.0,M10.5.0/3
+    Copy ENV:TZ ENVARC:
+
+(the second line keeps it after a reboot). Other zones, e.g. UK
+`GMT0BST,M3.5.0/1,M10.5.0`, US Eastern `EST5EDT,M3.2.0,M11.1.0`. Set it
+on every Amiga that runs rsync, also for the daemon. The Amiga clock has
+to show local time, including summer time.
+
+With `TZ` set, the dates on the server are right all year round, they
+come back unchanged on a restore, and nothing is sent again when the
+clock goes to or from summer time. Without `TZ` everything stays as in
+amiga1 to amiga4 (dates one or two hours ahead on the server, but stable).
+
+**Existing backups:** after setting `TZ`, the dates of all files on the
+server differ from the Amiga, and a normal run would read every file
+again. Run once with `--size-only` instead; it only corrects the dates
+and transfers nothing:
+
+    rsync -rtX --size-only /Work/ rsync://server/module/work/
+
+Limits: once a year the clock shows 02:00 to 03:00 twice. An Amiga file
+from that hour is always taken as the first 02:30 (summer time); a file
+from the server dated in the second one arrives as 02:30 and gets its
+date set again on every run. A date in the hour that does not exist in
+spring (02:00 to 03:00) comes back two hours later. `ENV:IXGMTOFFSET`
+(from ixemul's `ixtimezone`) is taken into account but was not tested.
+
+Tested with summer and winter dates: push to and pull from a Linux
+daemon, Linux client to the Amiga daemon, reruns, the migration with
+`--size-only`, and both edge cases above.
 
 ## Links (`-l`, `-H`)
 

@@ -85,6 +85,12 @@ int amiga_tell_receiver_wrapup(pid_t pid);
 void amiga_check_wrapup(void);
 void amiga_trace_msg(int code, const char *buf, int len);
 int amiga_cwd_name(char *buf, int len); /* amiga_dos.c */
+long amiga_ix_gmt_offset(void);         /* amiga_dos.c */
+
+/* File times between ixemul and real Unix time, see amiga.c. */
+#include <time.h>
+time_t amiga_time_from_fs(time_t t);
+time_t amiga_time_to_fs(time_t t);
 
 /* ixemul declares getgroups(int, int *); configure assumes gid_t when cross
  * compiling. */

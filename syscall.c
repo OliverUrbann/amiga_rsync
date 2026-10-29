@@ -2382,6 +2382,22 @@ int do_mkstemp(char *template, mode_t perms)
 #endif
 }
 
+#ifdef __amigaos__
+/* Real Unix file times instead of ixemul's (time zones), see amiga.c. */
+static int amiga_st(int ret, STRUCT_STAT *st)
+{
+	if (ret == 0) {
+		st->st_mtime = amiga_time_from_fs(st->st_mtime);
+		st->st_atime = amiga_time_from_fs(st->st_atime);
+		st->st_ctime = amiga_time_from_fs(st->st_ctime);
+	}
+	return ret;
+}
+#define stat(p, s) amiga_st(stat(p, s), s)
+#define lstat(p, s) amiga_st(lstat(p, s), s)
+#define fstat(f, s) amiga_st(fstat(f, s), s)
+#endif
+
 int do_stat(const char *path, STRUCT_STAT *st)
 {
 	RETURN_ERROR_IF_NULL(path);
@@ -2502,6 +2518,12 @@ int do_fstat(int fd, STRUCT_STAT *st)
 	return fstat(fd, st);
 #endif
 }
+
+#ifdef __amigaos__
+#undef stat
+#undef lstat
+#undef fstat
+#endif
 
 OFF_T do_lseek(int fd, OFF_T offset, int whence)
 {
@@ -2773,6 +2795,10 @@ int do_utimes(const char *path, STRUCT_STAT *stp)
 	t[1].tv_usec = stp->ST_MTIME_NSEC / 1000;
 #else
 	t[1].tv_usec = 0;
+#endif
+#ifdef __amigaos__
+	t[0].tv_sec = amiga_time_to_fs(t[0].tv_sec);
+	t[1].tv_sec = amiga_time_to_fs(t[1].tv_sec);
 #endif
 	return utimes(path, t);
 }

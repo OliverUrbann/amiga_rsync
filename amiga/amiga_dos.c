@@ -21,6 +21,7 @@
 #include <proto/exec.h>
 #include <proto/dos.h>
 #include <dos/dos.h>
+#include <dos/var.h>
 
 struct ExecBase *SysBase;
 struct DosLibrary *DOSBase;
@@ -49,6 +50,24 @@ int amiga_cwd_name(char *buf, int len)
 		CopyMem((APTR)"SYS:", buf, 5);
 	CloseLibrary((struct Library *)DOSBase);
 	return ok;
+}
+
+/* ixemul's fixed GMT offset, read the way ix_init() reads it: the binary
+ * variable ENV:IXGMTOFFSET (set by ixtimezone), 4 bytes of seconds plus a
+ * flags byte.  0 when unset. */
+long amiga_ix_gmt_offset(void)
+{
+	UBYTE buf[6];
+	long off = 0;
+
+	if (!dos_open())
+		return 0;
+	if (GetVar((CONST_STRPTR)"IXGMTOFFSET", (STRPTR)buf, 6, GVF_BINARY_VAR) == 5
+	    && IoErr() == 5)
+		off = ((long)buf[0] << 24) | ((long)buf[1] << 16)
+		    | ((long)buf[2] << 8) | buf[3];
+	CloseLibrary((struct Library *)DOSBase);
+	return off;
 }
 
 /*

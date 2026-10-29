@@ -146,6 +146,81 @@ const char *amiga_self_exe(void)
 	return self_exe;
 }
 
+/*
+ * File times and time zones.
+ *
+ * AmigaDOS stores file dates as local wall-clock time.  ixemul turns them
+ * into Unix time with one fixed offset (ENV:IXGMTOFFSET, normally unset,
+ * i.e. 0), so without help a file written at 13:00 CET reaches a Linux
+ * server as 13:00 UTC, and summer time is never taken into account.
+ *
+ * When TZ is set (e.g. "CET-1CEST,M3.5.0,M10.5.0/3"), we undo ixemul's
+ * offset to get the wall-clock time back and convert it with the TZ rules
+ * that apply on that file's own date.  That is right all year round and
+ * does not change when the clock goes to or from summer time.  Without TZ
+ * nothing changes, so existing backups stay as they are.
+ */
+static int tz_on = -1;
+static long ix_gmtoff;
+
+static int tz_active(void)
+{
+	if (tz_on < 0) {
+		const char *tz = getenv("TZ");
+		tz_on = tz && *tz;
+		if (tz_on) {
+			tzset();
+			ix_gmtoff = amiga_ix_gmt_offset();
+		}
+	}
+	return tz_on;
+}
+
+/* timegm(): broken-down UTC to seconds since 1970. */
+static time_t civil_to_time(const struct tm *tm)
+{
+	long y = tm->tm_year + 1900, m = tm->tm_mon + 1, d = tm->tm_mday;
+	long era, yoe, doy, doe;
+
+	if (m <= 2)
+		y--;
+	era = (y >= 0 ? y : y - 399) / 400;
+	yoe = y - era * 400;
+	doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
+	doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+	return (time_t)(era * 146097 + doe - 719468) * 86400
+	     + tm->tm_hour * 3600 + tm->tm_min * 60 + tm->tm_sec;
+}
+
+/* Time from ixemul's stat() to real Unix time. */
+time_t amiga_time_from_fs(time_t t)
+{
+	struct tm tm, *g;
+	time_t wall, u;
+
+	if (!tz_active())
+		return t;
+	wall = t - ix_gmtoff;
+	if (!(g = gmtime(&wall)))
+		return t;
+	tm = *g;
+	tm.tm_isdst = -1;
+	u = mktime(&tm);
+	return u == (time_t)-1 ? t : u;
+}
+
+/* Real Unix time to the value ixemul's utimes() expects. */
+time_t amiga_time_to_fs(time_t u)
+{
+	struct tm *l;
+
+	if (!tz_active())
+		return u;
+	if (!(l = localtime(&u)))
+		return u;
+	return civil_to_time(l) + ix_gmtoff;
+}
+
 void amiga_init(int argc, char *argv[])
 {
 	static int seq;
