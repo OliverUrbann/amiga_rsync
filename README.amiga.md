@@ -63,42 +63,53 @@ Everything in this table was run in the emulator and the result checked
 option that is not listed may well work; it has just not been tested
 here yet. Paths are Unix style (`/Work/src/`), see "Usage notes".
 
-| Option / feature | Result | How to use it, notes |
-|---|---|---|
-| `-r -t` | works | The basic backup: `rsync -rt /Work/src/ rsync://host/module/src/`. `-t` keeps the dates, so the next run only sends changes. |
-| Local copy | works | `rsync -rt /Work/src/ /DH1/backup/`, first copy, rerun without changes, delta transfer. |
-| Daemon client, push and pull | works | `rsync://host/module/...`; against rsync 3.5.1, 3.2.7, 3.1.3, 3.0.9 and 2.6.9. |
-| Daemon server on the Amiga | works | `rsync --daemon --no-detach --config=...` with `use chroot = no`; used from Linux and from another Amiga. |
-| `-X` | works | Comments and protection bits, both directions, see below. **Use it for backups.** |
-| `-p` | partly | Only `r`, `w`, `e` (and `d` together with `w`), owner bits only, see below. |
-| `-l` | works | Soft links, both directions. |
-| `-H` | works | Hard links. A hard-linked directory arrives as a directory with hard-linked files. |
-| `-R` | works | `-R /Work/src /Work/src2/sub` keeps the source path below the destination. Optional. |
-| `-i` | works | Itemized changes. A changed comment or protection shows as `.f........x`. |
-| `--delete` | works | Local and with a daemon, together with the delta transfer. |
-| `--exclude`, `--delete-excluded` | works | Local and Amiga to Amiga. |
-| `-c` (`--checksum`) | works | Local. |
-| `-z` (compression) | works | Local and Amiga to Amiga, push and pull. |
-| `--stats` | works | |
-| `--progress` | works | Local, daemon push and pull. In a file the updates sit in one line, separated by carriage returns. |
-| `--info=progress2` | works | Total progress, daemon pull. |
-| `rsync rsync://host/` | works | Lists the modules of a daemon. |
-| `-n` (`--dry-run`) | works | Nothing is created or changed. |
-| `--list-only` | works | `rsync --list-only rsync://host/module/dir/` |
-| `--include`, `--exclude-from`, `-m` | works | `--include=*/ --include=*.txt --exclude=*` with `-m` (`--prune-empty-dirs`). Write patterns without quotes: the Amiga shell does not expand `*`. |
-| `--files-from=/RAM/list.txt` | works | One path per line, relative to the source. |
-| `--max-size`, `--min-size` | works | `--max-size=1M` |
-| `--size-only`, `-u`, `--ignore-existing` | works | Behave as on other systems. |
-| `--delete-before`, `--delete-after` | works | |
-| `--backup --suffix=.bak` | works | The old copy is kept as `name.bak` on the receiving side. |
-| `--remove-source-files` | works | The sent files are deleted on the Amiga. |
-| `--inplace`, `-W`, `--partial` | works | |
-| `--bwlimit=500` | works | 2 MB took 4 s at 500 KB/s. |
-| `-x` | works | |
-| `-h`, `--log-file=RAM:r.log` | works | |
-| `--timeout`, `--contimeout`, `--port` | works | |
-| `--password-file=/RAM/pw` | works | For daemon modules with `auth users`: `rsync://user@host/module/`. A wrong password gives "auth failed", exit code 5. Without `--password-file` rsync asks on the terminal. |
-| `-a` | avoid | It contains `-p`. For backups use `-rtX` instead. |
+Result:
+
+- **works**: tested in every direction where it makes a difference.
+- **partly**: works, but with a limitation given in the notes.
+- **partly tested**: worked where it was tested; the notes say what is
+  still missing.
+- **avoid** / **not supported**: see the notes.
+
+Tested: **L** local copy on the Amiga, **push** Amiga client to a Linux
+daemon, **pull** Linux daemon to the Amiga client, **D** Linux client to
+the Amiga daemon, **AA** Amiga to Amiga.
+
+| Option / feature | Result | Tested | Notes |
+|---|---|---|---|
+| `-r -t` | partly | L, push, pull, D, AA | Contents and dates arrive, reruns only send changes, round trips give the original dates back. **But on a Linux server the dates are one hour ahead** (the time-zone offset), probably because ixemul takes the Amiga clock as UTC. Not tested yet: setting a time zone, summer time changes. |
+| Local copy | works | L | `rsync -rt /Work/src/ /DH1/backup/`: first copy, rerun without changes, delta transfer. |
+| Daemon client | works | push, pull | `rsync://host/module/...`; against rsync 3.5.1, 3.2.7, 3.1.3, 3.0.9 and 2.6.9. |
+| Daemon server on the Amiga | works | D, AA | `rsync --daemon --no-detach --config=...` with `use chroot = no`. `max connections` is not enforced. |
+| `-X` | works | L, push, pull, D | Comments and protection bits, on FFS and UAE's directory filesystem, see below. **Use it for backups.** |
+| `-p` | partly | push, pull | Only `r`, `w`, `e` (and `d` together with `w`), owner bits only, see below. |
+| `-l` | partly | L, push, pull | Soft links in both directions. Links sent from the Amiga have no date (1970 on Linux). See "Links". |
+| `-H` | works | L, push, pull | Hard links. A hard-linked directory arrives as a directory with hard-linked files. |
+| `-R` | partly tested | L | `-R /Work/src /Work/src2/sub` keeps the source path. Not tested with a daemon. |
+| `-i` | works | L, push, pull, D | A changed comment or protection shows as `.f........x`. |
+| `--delete` | works | L, push, pull, D | Together with the delta transfer. |
+| `-c` (`--checksum`) | works | L, push, pull | Same size and date but other content: only `-c` sends the file. |
+| `--exclude`, `--delete-excluded` | partly tested | L, push, AA | Pull not tested. |
+| `--include`, `--exclude-from`, `-m` | partly tested | push | `--include=*/ --include=*.txt --exclude=*` with `-m`. Write patterns without quotes: the Amiga shell does not expand `*`. Local and pull not tested. |
+| `--files-from=/RAM/list.txt` | partly tested | push | One path per line, relative to the source. Local and pull not tested. |
+| `-z` (compression) | partly tested | L, AA | Push and pull between two Amigas. Not tested yet against Linux. |
+| `-n` (`--dry-run`) | partly tested | push | Nothing created. With the Amiga as receiver (local, pull) not tested. |
+| `--max-size`, `--min-size` | partly tested | push | With the Amiga as receiver not tested. |
+| `--size-only`, `-u`, `--ignore-existing` | partly tested | push | Decided by the receiving side, here Linux; with the Amiga as receiver not tested. |
+| `--delete-before`, `--delete-after` | partly tested | push | Deleting on the Amiga not tested with these. |
+| `--backup --suffix=.bak` | partly tested | push | The old copy is kept as `name.bak` on Linux. Backups on the Amiga not tested (renaming works differently there, see "Usage notes"). |
+| `--remove-source-files` | partly tested | push | The sent files are deleted on the Amiga. Pull not tested. |
+| `--inplace`, `-W`, `--partial` | partly tested | push | With the Amiga as receiver not tested; `--partial` only with a complete transfer, not with an interrupted one. |
+| `--bwlimit=500` | partly tested | push | 2 MB took 4 s at 500 KB/s. Pull not tested. |
+| `-x` | partly tested | push | Only a tree on one volume; that rsync stops at other volumes is not tested. |
+| `--timeout`, `--contimeout`, `--port` | partly tested | push | Accepted and the transfer works; no timeout was actually triggered. |
+| `--password-file=/RAM/pw` | works | push | For modules with `auth users`: `rsync://user@host/module/`. A wrong password gives "auth failed", exit code 5. Without `--password-file` rsync asks on the terminal. |
+| `--stats`, `-h`, `--log-file=RAM:r.log` | works | L, push | Output only. |
+| `--progress` | works | L, push, pull | In a file the updates sit in one line, separated by carriage returns. |
+| `--info=progress2` | works | pull | Total progress. |
+| `--list-only`, `rsync rsync://host/` | works | push, AA | List a module's files, or the modules of a daemon. |
+| `-a` | avoid | | It contains `-p`. For backups use `-rtX` instead. |
+| Files of 2 GB or more | not supported | L, push | Skipped with an error, exit code 23. See "What does not work". |
 
 To put a `*` into a file with the Amiga `Echo` command, double it: `Echo "**.tmp" >RAM:ex.txt` writes `*.tmp`.
 
@@ -109,7 +120,7 @@ To put a `*` into a file with the Amiga `Echo` command, double it: `Echo "**.tmp
 | Comment | kept (`user.amiga.comment`) | lost |
 | Protection `r`, `w`, `e`, `d` | kept exactly | `r`, `w`, `e` kept; `w` and `d` travel together |
 | Protection `h`, `s`, `p`, `a` | kept | lost |
-| On the Linux server | files get the server's default mode (umask) | files get 0400 to 0700, no group or other bits |
+| Mode on the Linux server | new files get 0400 to 0700 from `r`, `w`, `e` as with `-p`; rsync leaves the mode of existing files alone | always set to 0400 to 0700, no group or other bits |
 | Needs on the server | rsync 3.0+ with xattr support, writable module | nothing special |
 
 Do not combine `-X` and `-p`: `-p` overwrites the bits that `-X` has just set.
